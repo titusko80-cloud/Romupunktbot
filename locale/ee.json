@@ -1,0 +1,12 @@
+{
+  "welcome": "Tere tulemast Romupunkti!\n\nMe aitame teie sõiduki kiirelt ja legaalselt lammutada. Valige keel:",
+  "language_selected": "Keel valitud: {lang}",
+  "plate_prompt": "Sisestage oma sõiduki numberkood (näiteks: 123 ABC):",
+  "owner_prompt": "Mis on teie nimi?",
+  "weight_prompt": "Mis on teie sõiduki tühimass (kg)?",
+  "completeness_prompt": "Kas sõiduk on täielik?",
+  "logistics_prompt": "Kuidas soovite sõiduki transportida?",
+  "photos_prompt": "Palun saatke 3-4 selget fotot sõidukist eri nurkadest.",
+  "phone_prompt": "Palun sisestage oma telefoninumber.",
+  "legal_note": "Me vormistame ka lammutustõendi ja aitame sõiduki registrist eemaldamisega."
+}

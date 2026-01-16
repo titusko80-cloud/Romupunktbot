@@ -1,0 +1,12 @@
+{
+  "welcome": "Welcome to Romupunkt!\n\nWe help you dismantle your vehicle quickly and legally. Choose your language:",
+  "language_selected": "Language selected: {lang}",
+  "plate_prompt": "Please enter your vehicle's license plate number (example: 123 ABC):",
+  "owner_prompt": "What is your name?",
+  "weight_prompt": "What is your vehicle's curb weight (kg)?",
+  "completeness_prompt": "Is the vehicle complete?",
+  "logistics_prompt": "How would you like to transport the vehicle?",
+  "photos_prompt": "Please send 3-4 clear photos of the vehicle from different angles.",
+  "phone_prompt": "Please enter your phone number.",
+  "legal_note": "We also handle the certificate of destruction and deregistration paperwork."
+}

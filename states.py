@@ -1,0 +1,11 @@
+"""Conversation state constants for Romupunkt Bot."""
+
+LANGUAGE = 0
+VEHICLE_PLATE = 1
+OWNER_NAME = 2
+CURB_WEIGHT = 3
+COMPLETENESS = 4
+LOGISTICS = 5
+LOCATION = 6
+PHOTOS = 7
+PHONE = 8
