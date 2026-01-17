@@ -225,7 +225,7 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
         logger.error("Lead %d not found for admin notification", lead_id)
         return
     
-    lang = lead.get("language", "en")
+    # 🔴 REQUIRED: Load photos for this lead
     photos = get_lead_photos(lead_id)
     logger.info(f"📸 DEBUG: Retrieved {len(photos)} photos for lead {lead_id}")
     
@@ -289,12 +289,9 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
     
     caption = "\n".join(caption_lines)
     
-    # CRITICAL: Send media group with photos if they exist
+    # 🔴 REQUIRED: Build media group exactly as specified
     if photos:
-        logger.info(f"📸 CRITICAL: Building media group with {len(photos)} photos")
         media = []
-        
-        # Step B: Build media group exactly as specified
         for i, photo_dict in enumerate(photos):
             file_id = photo_dict["file_id"]
             logger.info(f"📸 CRITICAL: Processing photo {i+1}/{len(photos)}: {file_id}")
@@ -316,7 +313,7 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
         
         logger.info(f"📸 CRITICAL: Media group built with {len(media)} items")
         
-        # Step C: Send the album to admin
+        # 🔴 REQUIRED: Send the album to admin
         try:
             logger.info(f"📸 CRITICAL: Sending media group to admin {ADMIN_TELEGRAM_USER_ID}")
             await context.bot.send_media_group(
@@ -341,7 +338,7 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
             parse_mode="HTML"
         )
     
-    # Step D: Send buttons as a second message (mandatory separation)
+    # 🔴 REQUIRED: Send buttons as a second message
     logger.info(f"📸 CRITICAL: Sending action buttons as separate message for lead {lead_id}")
     reply_markup = InlineKeyboardMarkup([
         [

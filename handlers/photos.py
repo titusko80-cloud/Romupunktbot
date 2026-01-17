@@ -170,25 +170,13 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
         return PHOTOS
     
-    # Normal response
-    if lang == 'ee':
-        msg = f"Foto {count} saadetud."
-        if count < 3:
-            msg += f" Palun saatke veel {3 - count} fotot."
+    # Minimal response only for first few photos
+    if count <= 1:
+        if lang == 'ee':
+            msg = f"Foto {count} saadetud. Palun saatke veel {max(0, 3 - count)} fotot."
+        elif lang == 'ru':
+            msg = f"Отправлено фото {count}. Пожалуйста, пришлите еще {max(0, 3 - count)} фото."
         else:
-            msg += " Kui olete valmis, vajutage 'Valmis'."
-    elif lang == 'ru':
-        msg = f"Фото {count} получено."
-        if count < 3:
-            msg += f" Пожалуйста, отправьте ещё {3 - count} фото."
-        else:
-            msg += " Когда будете готовы, нажмите 'Готово'."
-    else:
-        msg = f"Photo {count} received."
-        if count < 3:
-            msg += f" Please send {3 - count} more photos."
-        else:
-            msg += " When finished, tap 'Done'."
-
-    await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
+            msg = f"Photo {count} sent. Please send {max(0, 3 - count)} more photos."
+        await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
     return PHOTOS
