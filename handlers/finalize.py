@@ -210,97 +210,9 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     lead_id = save_lead(context.user_data, user.id, getattr(user, "username", None))
     context.user_data["lead_id"] = lead_id
     logger.info("Saved lead with ID %s for user %s", lead_id, user.id)
-<<<<<<< HEAD
 
-    if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
-        logger.info("Attempting to send admin notification for lead %s. ADMIN_TELEGRAM_USER_ID=%s", lead_id, ADMIN_TELEGRAM_USER_ID)
-        
-        # 🔥 FIX: Use send_media_group instead of sendMessage
-        try:
-            from database.models import get_lead_photos
-            photos = get_lead_photos(lead_id)
-        except Exception as e:
-            logger.exception("FAILED loading lead photos")
-            photos = []
-        
-        # Build caption
-        plate = context.user_data.get("plate_number")
-        name = context.user_data.get("owner_name")
-        weight = context.user_data.get("curb_weight")
-        phone = context.user_data.get("phone_number")
-        lang = context.user_data.get("language")
-        
-        if lang == "ee":
-            title = f"🏎️ Päring #{lead_id}"
-        elif lang == "ru":
-            title = f"🏎️ Заявка #{lead_id}"
-        else:
-            title = f"🏎️ Inquiry #{lead_id}"
-        
-        caption_lines = [
-            title,
-            "",
-            f"📋 Number: {plate}",
-            f"👤 Name: {name}",
-            f"📞 Phone: {phone}",
-            f"⚖️ Weight: {weight}kg",
-            f"📷 Photos: {len(photos)}",
-        ]
-        
-        caption = "\n".join(caption_lines)
-        
-        # Build media group
-        if photos:
-            from telegram import InputMediaPhoto
-            media = []
-            for i, photo_dict in enumerate(photos):
-                file_id = photo_dict["file_id"] if isinstance(photo_dict, dict) else photo_dict[0]
-                if i == 0:
-                    media.append(InputMediaPhoto(media=file_id, caption=caption, parse_mode="HTML"))
-                else:
-                    media.append(InputMediaPhoto(media=file_id))
-            
-            # Send media group
-            await context.bot.send_media_group(
-                chat_id=ADMIN_TELEGRAM_USER_ID,
-                media=media
-            )
-            logger.info(f"✅ SUCCESS: Media group sent with {len(photos)} photos for lead {lead_id}")
-        else:
-            # No photos, send text message
-            await context.bot.send_message(
-                chat_id=ADMIN_TELEGRAM_USER_ID,
-                text=caption,
-                parse_mode="HTML"
-            )
-        
-        # Send buttons as second message
-        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-        reply_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"admin_reply:{lead_id}")],
-            [InlineKeyboardButton("🗑️ Arhiveeri", callback_data=f"admin_archive:{lead_id}")]
-        ])
-        
-        await context.bot.send_message(
-            chat_id=ADMIN_TELEGRAM_USER_ID,
-            text=f"🎯 Actions for lead #{lead_id}:",
-            reply_markup=reply_markup
-        )
-        
-        logger.info("Admin notification sent for lead %s", lead_id)
-    else:
-        logger.warning("ADMIN_TELEGRAM_USER_ID is not set or <=0 (value=%s); skipping admin notification for lead %s", ADMIN_TELEGRAM_USER_ID, lead_id)
-=======
-    
-    # CRITICAL: Send live Lead Card to admin IMMEDIATELY after database commit
-    logger.info("Triggering live admin notification for lead %d (no photos)", lead_id)
-    
-    # 🔥 DEBUG: Find the real file
-    import inspect
-    logger.error("🔥 PHONE_NUMBER FILE: %s", inspect.getfile(inspect.currentframe()))
-    
+    # Send admin notification using the fixed send_lead_card function
     await send_lead_card(context, lead_id, full_phone)
->>>>>>> 1099954472c2c60950d7cfd6d061e3aa581ef4b9
 
     if context.user_data.get("language") == "ee":
         msg = "Aitäh! Võtame teiega ühendust pakkumisega."
@@ -314,15 +226,7 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone_number: str) -> None:
-    """Send professional Lead Card with media group and rich HTML caption"""
-    # 🔥 DEBUG: Find the real file
-    import inspect
-    logger.error("🔥 ADMIN NOTIFIER FILE: %s", inspect.getfile(inspect.currentframe()))
-    
-    # 🔥🔥🔥 send_lead_card ACTIVE — THIS MUST APPEAR 🔥🔥🔥
-    logger.error("🔥🔥🔥 send_lead_card ACTIVE — THIS MUST APPEAR 🔥🔥🔥")
-    print("🔥🔥🔥 send_lead_card ACTIVE — THIS MUST APPEAR 🔥🔥🔥")
-    
+    """Send professional Lead Card with media group and compact layout"""
     if not ADMIN_TELEGRAM_USER_ID or ADMIN_TELEGRAM_USER_ID <= 0:
         logger.warning("ADMIN_TELEGRAM_USER_ID not set or invalid")
         return
@@ -332,138 +236,130 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
         logger.error("Lead %d not found for admin notification", lead_id)
         return
     
-    # 🔴 PATCH 1: Define lang (BLOCKER #1 FIXED)
+    # Get user language from lead data
     lang = lead.get("language") or "en"
     
-    # 🔴 REQUIRED: Load photos for this lead
+    # Load photos for this lead (max 5)
     photos = get_lead_photos(lead_id)
-    logger.info(f"📸 DEBUG: Retrieved {len(photos)} photos for lead {lead_id}")
+    photos = photos[:5]  # Enforce max 5 photos
+    logger.info(f"MEDIA_GROUP_SENT lead_id={lead_id} photos={len(photos)}")
     
-    # Debug: Log photo file_ids
-    if photos:
-        for i, photo in enumerate(photos):
-            logger.info(f"📸 DEBUG: Photo {i+1}: {photo['file_id']}")
-    else:
-        logger.warning(f"📸 DEBUG: No photos found for lead {lead_id}")
+    # Language-specific labels
+    LABELS = {
+        "et": {
+            "number": "Number",
+            "name": "Nimi",
+            "phone": "Telefon",
+            "owner": "Omanik",
+            "delivery": "Transport"
+        },
+        "ru": {
+            "number": "Номер",
+            "name": "Имя",
+            "phone": "Телефон",
+            "owner": "Владелец",
+            "delivery": "Доставка"
+        },
+        "en": {
+            "number": "Plate",
+            "name": "Name",
+            "phone": "Phone",
+            "owner": "Owner",
+            "delivery": "Delivery"
+        }
+    }
     
-    # Build inquiry form with HTML formatting
-    if lang == "ee":
-        title = f"<b>🏎️ Päring #{lead_id}</b>"
-        labels = {"plate": "Number", "name": "Nimi", "phone": "Telefon", "weight": "Mass", "owner": "Omanik"}
-    elif lang == "ru":
-        title = f"<b>🏎️ Заявка #{lead_id}</b>"
-        labels = {"plate": "Номер", "name": "Имя", "phone": "Телефон", "weight": "Масса", "owner": "Владелец"}
-    else:
-        title = f"<b>🏎️ Inquiry #{lead_id}</b>"
-        labels = {"plate": "Plate", "name": "Name", "phone": "Phone", "weight": "Weight", "owner": "Owner"}
+    labels = LABELS.get(lang, LABELS["en"])
     
-    # 🔴 PATCH 2: Fix phone rendering (BLOCKER #2 FIXED)
-    readable_phone = phone_number
-    
-    # Build inquiry form caption with plain text phone (B3 rule)
+    # Build compact caption (no emojis spam, one glance = decision)
     caption_lines = [
-        title,
-        "",
-        f"<b>📋 {labels['plate']}:</b> <code>{lead.get('plate_number')}</code>",
-        f"<b>👤 {labels['name']}:</b> {lead.get('owner_name')}",
-        f"<b>📞 {labels['phone']}:</b> {readable_phone}",
-        f"<b>⚖️ {labels['weight']}:</b> {lead.get('curb_weight')}kg",
+        f"🚗 Lead #{lead_id}",
+        f"{labels['number']}: {lead.get('plate_number')}",
     ]
     
-    # Add owner status
+    # Owner status (always show)
     is_owner = lead.get('is_owner')
     if is_owner is not None:
-        owner_status = "Jah" if int(is_owner) == 1 else "Ei"
-        if lang == "ru":
+        owner_status = "Yes" if int(is_owner) == 1 else "No"
+        if lang == "et":
+            owner_status = "Jah" if int(is_owner) == 1 else "Ei"
+        elif lang == "ru":
             owner_status = "Да" if int(is_owner) == 1 else "Нет"
-        elif lang == "en":
-            owner_status = "Yes" if int(is_owner) == 1 else "No"
-        caption_lines.append(f"<b>🔑 {labels['owner']}:</b> {owner_status}")
+        caption_lines.append(f"{labels['owner']}: {owner_status}")
     
-    # Add completeness if available
-    completeness = lead.get('completeness')
-    if completeness:
-        if completeness == "complete":
-            comp_text = "✅ Täielik" if lang == "ee" else "✅ Полный" if lang == "ru" else "✅ Complete"
-        else:
-            comp_text = "❌ Puudub" if lang == "ee" else "❌ Не полный" if lang == "ru" else "❌ Missing parts"
-        caption_lines.append(f"<b>🔧 Komplektsus:</b> {comp_text}")
+    caption_lines.extend([
+        f"{labels['phone']}: {phone_number}",
+    ])
     
-    # Add transport info
+    # Delivery method (always show)
     transport = lead.get('transport_method')
-    if transport:
-        caption_lines.append(f"<b>🚚 Transport:</b> {transport}")
+    needs_tow = lead.get('needs_tow')
     
-    # Add photo count
-    caption_lines.append(f"<b>📷 Photos:</b> {len(photos)}")
+    if transport:
+        if lang == "et":
+            delivery_text = "Toon ise" if "bring" in transport.lower() else "Vajab buksüüri"
+        elif lang == "ru":
+            delivery_text = "Привезу сам" if "bring" in transport.lower() else "Нужен эвакуатор"
+        else:
+            delivery_text = "Will bring" if "bring" in transport.lower() else "Tow needed"
+        caption_lines.append(f"{labels['delivery']}: {delivery_text}")
+    elif needs_tow is not None:
+        if int(needs_tow) == 1:
+            if lang == "et":
+                delivery_text = "Vajab buksüüri"
+            elif lang == "ru":
+                delivery_text = "Нужен эвакуатор"
+            else:
+                delivery_text = "Tow needed"
+        else:
+            if lang == "et":
+                delivery_text = "Toon ise"
+            elif lang == "ru":
+                delivery_text = "Привезу сам"
+            else:
+                delivery_text = "Will bring"
+        caption_lines.append(f"{labels['delivery']}: {delivery_text}")
     
     caption = "\n".join(caption_lines)
     
-    # 🔴 REQUIRED: Build media group exactly as specified
+    # Send media group with photos only (caption on first photo)
     if photos:
         media = []
         for i, photo_dict in enumerate(photos):
-            # 🔴 PATCH 3: Safe photo access (BLOCKER #3 FIXED)
             file_id = photo_dict["file_id"] if isinstance(photo_dict, dict) else photo_dict[0]
-            logger.info(f"📸 CRITICAL: Processing photo {i+1}/{len(photos)}: {file_id}")
             
             if i == 0:
                 # First photo gets caption
-                logger.info(f"📸 CRITICAL: Adding photo {i+1} with caption")
-                media.append(
-                    InputMediaPhoto(
-                        media=file_id,
-                        caption=caption,
-                        parse_mode="HTML"
-                    )
-                )
+                media.append(InputMediaPhoto(media=file_id, caption=caption))
             else:
                 # Remaining photos without caption
-                logger.info(f"📸 CRITICAL: Adding photo {i+1} without caption")
                 media.append(InputMediaPhoto(media=file_id))
         
-        logger.info(f"📸 CRITICAL: Media group built with {len(media)} items")
-        
-        # 🔴 REQUIRED: Send the album to admin
-        try:
-            logger.info(f"📸 CRITICAL: Sending media group to admin {ADMIN_TELEGRAM_USER_ID}")
-            await context.bot.send_media_group(
-                chat_id=ADMIN_TELEGRAM_USER_ID,
-                media=media
-            )
-            logger.info(f"✅ SUCCESS: Media group sent with {len(photos)} photos for lead {lead_id}")
-        except Exception as e:
-            logger.error(f"❌ FAILED: Media group failed for lead {lead_id}: {e}")
-            logger.info(f"📸 FALLBACK: Sending text message instead")
-            await context.bot.send_message(
-                chat_id=ADMIN_TELEGRAM_USER_ID,
-                text=caption,
-                parse_mode="HTML"
-            )
+        # Send media group
+        await context.bot.send_media_group(
+            chat_id=ADMIN_TELEGRAM_USER_ID,
+            media=media
+        )
+        logger.info(f"MEDIA_GROUP_SENT lead_id={lead_id} photos={len(photos)}")
     else:
-        # No photos, send text-only inquiry form
-        logger.info(f"📸 NO PHOTOS: Sending text-only inquiry form for lead {lead_id}")
+        # No photos, send text message
         await context.bot.send_message(
             chat_id=ADMIN_TELEGRAM_USER_ID,
-            text=caption,
-            parse_mode="HTML"
+            text=caption
         )
     
-    # B4 RULE: Admin actions with plain text phone and correct buttons
-    logger.info(f"📸 CRITICAL: Sending action buttons as separate message for lead {lead_id}")
+    # Send buttons as separate message (NEVER in media caption)
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
     reply_markup = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"reply:{lead_id}"),
-            InlineKeyboardButton("🗑 Arhiveeri", callback_data=f"archive:{lead_id}"),
-        ]
+        [InlineKeyboardButton("💬 Reply", callback_data=f"admin_reply:{lead_id}")],
+        [InlineKeyboardButton("🗑️ Archive", callback_data=f"admin_archive:{lead_id}")]
     ])
     
     await context.bot.send_message(
         chat_id=ADMIN_TELEGRAM_USER_ID,
-        text=f"📞 Telefon: {readable_phone}",
+        text=f"Actions for lead #{lead_id}:",
         reply_markup=reply_markup
     )
-    logger.info(f"✅ SUCCESS: Action buttons sent for lead {lead_id}")
 
 async def phone_country_code(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     choice = update.message.text.strip()
