@@ -13,7 +13,7 @@ from unittest.mock import Mock, AsyncMock
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from database.models import init_db, save_lead, save_photo_file_id, get_lead_photos, get_lead_by_id
-from handlers.finalize import _send_admin_notification
+from handlers.finalize import send_lead_card
 
 async def test_complete_flow():
     """Test the complete flow from photo upload to admin notification"""
@@ -88,7 +88,7 @@ async def test_complete_flow():
     from config import ADMIN_TELEGRAM_USER_ID
     
     # Call the notification function
-    await _send_admin_notification(mock_context, lead_id, '+37252345678')
+    await send_lead_card(mock_context, lead_id, '+37252345678')
     
     # Verify the bot methods were called
     if mock_bot.send_media_group.called:
@@ -160,7 +160,7 @@ async def test_edge_cases():
     
     mock_bot.send_message = AsyncMock(return_value=None)
     
-    await _send_admin_notification(mock_context, lead_id, '+1234567890')
+    await send_lead_card(mock_context, lead_id, '+1234567890')
     
     if mock_bot.send_message.called:
         print("✅ Text-only notification sent for lead without photos")
@@ -172,7 +172,7 @@ async def test_edge_cases():
     print("\nTest 3: Invalid lead ID")
     mock_bot.reset_mock()
     
-    await _send_admin_notification(mock_context, 999999, '+1234567890')
+    await send_lead_card(mock_context, 999999, '+1234567890')
     
     if not mock_bot.send_media_group.called and not mock_bot.send_message.called:
         print("✅ Invalid lead ID handled correctly (no notification sent)")

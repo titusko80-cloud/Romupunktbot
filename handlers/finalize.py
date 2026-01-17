@@ -215,7 +215,7 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone_number: str) -> None:
-    """Send live Lead Card with thumbnails and inquiry form"""
+    """Send professional Lead Card with media group and rich HTML caption"""
     if not ADMIN_TELEGRAM_USER_ID or ADMIN_TELEGRAM_USER_ID <= 0:
         logger.warning("ADMIN_TELEGRAM_USER_ID not set or invalid")
         return
@@ -227,17 +227,17 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
     
     lang = lead.get("language", "en")
     photos = get_lead_photos(lead_id)
-    logger.info(f"📸 Sending LIVE Lead Card {lead_id} with {len(photos)} photos to admin.")
+    logger.info(f"📸 Sending Lead Card {lead_id} with {len(photos)} photos to admin.")
     
     # Build inquiry form with HTML formatting
     if lang == "ee":
-        title = f"<b>🏎️ LIVE Päring #{lead_id}</b>"
+        title = f"<b>🏎️ Päring #{lead_id}</b>"
         labels = {"plate": "Number", "name": "Nimi", "phone": "Telefon", "weight": "Mass", "owner": "Omanik"}
     elif lang == "ru":
-        title = f"<b>🏎️ LIVE Заявка #{lead_id}</b>"
+        title = f"<b>🏎️ Заявка #{lead_id}</b>"
         labels = {"plate": "Номер", "name": "Имя", "phone": "Телефон", "weight": "Масса", "owner": "Владелец"}
     else:
-        title = f"<b>🏎️ LIVE Inquiry #{lead_id}</b>"
+        title = f"<b>🏎️ Inquiry #{lead_id}</b>"
         labels = {"plate": "Plate", "name": "Name", "phone": "Phone", "weight": "Weight", "owner": "Owner"}
     
     # Make phone clickable for one-tap calling
@@ -282,8 +282,9 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
     
     caption = "\n".join(caption_lines)
     
-    # Send media group with thumbnails if photos exist
+    # CRITICAL: Send media group with photos if they exist
     if photos:
+        logger.info(f"📸 Sending media group with {len(photos)} photos for lead {lead_id}")
         media = []
         # First photo gets the inquiry form caption
         media.append(InputMediaPhoto(
@@ -300,7 +301,7 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
                 chat_id=ADMIN_TELEGRAM_USER_ID,
                 media=media
             )
-            logger.info(f"✅ LIVE Lead Card sent with {len(photos)} photos for lead {lead_id}")
+            logger.info(f"✅ Media group sent with {len(photos)} photos for lead {lead_id}")
         except Exception as e:
             logger.error(f"❌ Failed to send media group for lead {lead_id}: {e}")
             # Fallback to text message if media group fails
@@ -328,10 +329,10 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
     
     await context.bot.send_message(
         chat_id=ADMIN_TELEGRAM_USER_ID,
-        text=f"🎯 Actions for LIVE lead #{lead_id}:",
+        text=f"🎯 Actions for lead #{lead_id}:",
         reply_markup=reply_markup
     )
-    logger.info(f"✅ LIVE Lead Card completed for lead {lead_id}")
+    logger.info(f"✅ Lead Card completed for lead {lead_id}")
 
 async def phone_country_code(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     choice = update.message.text.strip()

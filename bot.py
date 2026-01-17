@@ -54,8 +54,9 @@ def main():
         try:
             # Set honest multilingual descriptions for empty chat window
             descriptions = {
-                'et': '🏎️ ROMUPUNKT: Autode ost ja lammutamine. Saada andmed ja pildid, me teeme pakkumise. Vormistame ametliku lammutustõendi.',
-                'en': '🏎️ ROMUPUNKT: Car buying and dismantling. Send details and photos, and we will make an offer. We provide an official destruction certificate.'
+                'et': '🏎️ ROMUPUNKT: Autode ost ja lammutamine. Saada andmed ja pildid, me teeme pakkumise. Vormistame lammutustõendi ja eemaldame sõiduki registrist.',
+                'ru': '🏎️ ROMUPUNKT: Скупка и утилизация автомобилей. Пришлите данные и фото, и мы сделаем предложение. Оформляем справку об утилизации и снимаем с учета.',
+                'en': '🏎️ ROMUPUNKT: Car buying and dismantling. Send details and photos, and we will make an offer. We provide destruction certificate and deregister the vehicle.'
             }
             
             # Set descriptions for all languages
