@@ -5,7 +5,7 @@ Configuration settings for Romupunkt Bot
 import os
 
 # Your bot token from @BotFather
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or "YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or "YOUR_BOT_TOKEN_HERE"
 
 # Database settings
 DATABASE_URL = "sqlite:///romupunkt.db"
@@ -18,7 +18,12 @@ MAX_PHOTOS = 4
 PHOTO_QUALITY = 80
 
 # Supported languages
-SUPPORTED_LANGUAGES = ['ee', 'en']
+SUPPORTED_LANGUAGES = ['ee', 'en', 'ru']
+
+try:
+    ADMIN_TELEGRAM_USER_ID = int(os.getenv("ADMIN_TELEGRAM_USER_ID") or "0")
+except ValueError:
+    ADMIN_TELEGRAM_USER_ID = 0
 
 # Estonian license plate format regex
 LICENSE_PLATE_REGEX = r'^[0-9]{3}\s[A-Z]{3}$'
