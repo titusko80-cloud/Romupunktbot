@@ -2,6 +2,7 @@
 Photo collection handler - Handle image uploads and storage
 """
 
+import logging
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.ext import ContextTypes
 from states import PHOTOS, PHONE
@@ -10,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 
+logger = logging.getLogger(__name__)
 _BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -83,20 +85,14 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     lang = context.user_data.get('language')
 
-    file = None
-    ext = "jpg"
+    file_id = None
     if update.message.photo:
-        file = await update.message.photo[-1].get_file()
-        ext = "jpg"
+        photo = update.message.photo[-1]
+        file_id = photo.file_id
+        logger.info("SAVED PHOTO FILE_ID: %s", file_id)
     elif update.message.document and (update.message.document.mime_type or "").startswith("image/"):
-        file = await update.message.document.get_file()
-        mt = update.message.document.mime_type or ""
-        if mt == "image/png":
-            ext = "png"
-        elif mt == "image/webp":
-            ext = "webp"
-        else:
-            ext = "jpg"
+        file_id = update.message.document.file_id
+        logger.info("SAVED DOCUMENT FILE_ID: %s", file_id)
     else:
         if lang == 'ee':
             msg = "Palun saatke foto (pilt) või vajutage 'Valmis'."
@@ -107,20 +103,8 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
         return PHOTOS
     
-    photo_dir = _BASE_DIR / 'photos'
-    photo_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Generate unique filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    user_id = update.effective_user.id
-    rel_path = Path('photos') / f"{user_id}_{timestamp}_{context.user_data['photo_count'] + 1}.{ext}"
-    abs_path = _BASE_DIR / rel_path
-    
-    # Download and save photo
-    await file.download_to_drive(str(abs_path))
-    
-    # Store photo info
-    context.user_data['photos'].append(rel_path.as_posix())
+    # Store file_id directly (no download, no URLs)
+    context.user_data['photos'].append(file_id)
     context.user_data['photo_count'] += 1
 
     count = context.user_data['photo_count']

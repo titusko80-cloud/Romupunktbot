@@ -46,6 +46,31 @@ def main():
     init_db()
     
     async def _post_init(app: Application) -> None:
+        """Set up bot descriptions and commands"""
+        try:
+            # Set bot descriptions for each language (pre-start empty chat text)
+            await app.bot.set_my_description(
+                description="🏎️ ROMUPUNKT\n\nOstame autosid, millega omanik ei taha enam tegeleda.\n\nKui auto seisab, on katki või lihtsalt mittevajalik — vajuta START.",
+                language_code="et"
+            )
+            logger.info("✅ Bot description set for Estonian")
+            
+            await app.bot.set_my_description(
+                description="🏎️ ROMUPUNKT\n\nПокупаем автомобили, с которыми владелец больше не хочет возиться.\n\nЕсли машина стоит, сломана или просто не нужна — нажми START.",
+                language_code="ru"
+            )
+            logger.info("✅ Bot description set for Russian")
+            
+            await app.bot.set_my_description(
+                description="🏎️ ROMUPUNKT\n\nWe buy cars people no longer want to deal with.\n\nIf the car is standing, broken or simply unwanted — press START.",
+                language_code="en"
+            )
+            logger.info("✅ Bot description set for English")
+            
+        except Exception as e:
+            logger.warning("Failed to set bot descriptions: %s", e)
+        
+        # Set commands for all users
         try:
             await app.bot.set_my_commands(
                 [

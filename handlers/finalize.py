@@ -140,8 +140,12 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         logger.info("Attempting to send admin notification for lead %s. ADMIN_TELEGRAM_USER_ID=%s", lead_id, ADMIN_TELEGRAM_USER_ID)
         
         # 🔥 FIX: Use send_media_group instead of sendMessage
-        from database.models import get_lead_photos
-        photos = get_lead_photos(lead_id)
+        try:
+            from database.models import get_lead_photos
+            photos = get_lead_photos(lead_id)
+        except Exception as e:
+            logger.exception("FAILED loading lead photos")
+            photos = []
         
         # Build caption
         plate = context.user_data.get("plate_number")
