@@ -9,7 +9,9 @@ from states import PHOTOS, PHONE
 import os
 from datetime import datetime
 from pathlib import Path
+import logging
 
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 _BASE_DIR = Path(__file__).resolve().parent.parent
@@ -38,7 +40,19 @@ def _done_keyboard(lang: str) -> ReplyKeyboardMarkup:
 
 
 async def _ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Ask for phone number and send admin notification if lead exists"""
+    from handlers.finalize import send_lead_card
+    
     lang = context.user_data.get('language')
+    lead_id = context.user_data.get('lead_id')
+    
+    # If we have a lead (photos were sent), send admin notification now
+    if lead_id:
+        phone = context.user_data.get('phone_number')
+        if phone:
+            logger.info("Sending admin notification for existing lead %d after photos", lead_id)
+            await send_lead_card(context, lead_id, phone)
+    
     if lang == 'ee':
         msg = "Täname! Viimane samm:\n\nPalun sisestage oma telefoninumber, et me saaksime teile kiiresti pakkumise teha:"
     elif lang == 'ru':
@@ -51,40 +65,67 @@ async def _ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    lang = context.user_data.get('language')
-    if _is_done_text(update.message.text, lang):
-        if context.user_data.get('photo_count', 0) >= 3:
+    """Handle 'Done' button - enforce gate before proceeding"""
+    from database.models import get_session_photos
+    
+    lang = context.user_data.get('language', 'en')
+    text = update.message.text.strip()
+    
+    # Check for Done button in all languages
+    done_texts = ['✅ Valmis', '✅ Готово', '✅ Done']
+    
+    if text in done_texts:
+        session_id = context.user_data.get('session_id')
+        if not session_id:
+            # No session, proceed to phone step
             return await _ask_phone(update, context)
-
-        if lang == 'ee':
-            msg = "Palun saatke vähemalt 3 fotot enne kui lõpetate."
-        elif lang == 'ru':
-            msg = "Пожалуйста, отправьте минимум 3 фото перед завершением."
-        else:
-            msg = "Please send at least 3 photos before finishing."
-
-        await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
-        return PHOTOS
-
+        
+        # Check if user has uploaded any photos
+        user_id = update.effective_user.id
+        photos = get_session_photos(user_id, session_id)
+        
+        if not photos:
+            # No photos uploaded, warn user
+            if lang == 'ee':
+                msg = "Palun saatke vähemalt üks foto enne 'Valmis' vajutamist."
+            elif lang == 'ru':
+                msg = "Пожалуйста, отправьте хотя бы одно фото перед нажатием 'Готово'."
+            else:
+                msg = "Please send at least one photo before tapping 'Done'."
+            await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
+            return PHOTOS
+        
+        # Have photos, proceed to phone step
+        logger.info("User clicked Done with %d photos in session %s", len(photos), session_id)
+        return await _ask_phone(update, context)
+    
+    # Any other text during photo phase
     if lang == 'ee':
-        msg = "Palun saatke foto(d). Kui olete valmis (vähemalt 3 fotot), vajutage 'Valmis'."
+        msg = "Palun saatke foto või vajutage 'Valmis'."
     elif lang == 'ru':
-        msg = "Пожалуйста, отправьте фото. Когда будете готовы (минимум 3 фото), нажмите 'Готово'."
+        msg = "Пожалуйста, отправьте фото или нажмите 'Готово'."
     else:
-        msg = "Please send photo(s). When finished (at least 3 photos), tap 'Done'."
+        msg = "Please send a photo or tap 'Done'."
 
     await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
     return PHOTOS
 
 async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle photo uploads"""
-    # Initialize photo count if not exists
-    if 'photo_count' not in context.user_data:
+    """Handle photo uploads with session-based storage and concurrency safety"""
+    import uuid
+    from database.models import save_session_photo
+    
+    # Generate or get session ID with user isolation
+    if 'session_id' not in context.user_data:
+        context.user_data['session_id'] = str(uuid.uuid4())
         context.user_data['photo_count'] = 0
-        context.user_data['photos'] = []
+        logger.info("Created session %s for user %s", context.user_data['session_id'], update.effective_user.id)
 
+    session_id = context.user_data['session_id']
+    user_id = update.effective_user.id
     lang = context.user_data.get('language')
 
+<<<<<<< HEAD
     file_id = None
     if update.message.photo:
         photo = update.message.photo[-1]
@@ -93,6 +134,16 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     elif update.message.document and (update.message.document.mime_type or "").startswith("image/"):
         file_id = update.message.document.file_id
         logger.info("SAVED DOCUMENT FILE_ID: %s", file_id)
+=======
+    file = None
+    if update.message.photo:
+        # Get highest resolution photo (last in array)
+        file = await update.message.photo[-1].get_file()
+        logger.info("Got photo file_id: %s", file.file_id)
+    elif update.message.document and (update.message.document.mime_type or "").startswith("image/"):
+        file = await update.message.document.get_file()
+        logger.info("Got document file_id: %s", file.file_id)
+>>>>>>> 1099954472c2c60950d7cfd6d061e3aa581ef4b9
     else:
         if lang == 'ee':
             msg = "Palun saatke foto (pilt) või vajutage 'Valmis'."
@@ -103,29 +154,49 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
         return PHOTOS
     
+<<<<<<< HEAD
     # Store file_id directly (no download, no URLs)
     context.user_data['photos'].append(file_id)
     context.user_data['photo_count'] += 1
+=======
+    # Save to session-based storage with concurrency safety
+    try:
+        save_session_photo(user_id, session_id, file.file_id)
+        context.user_data['photo_count'] += 1
+        logger.info("Saved photo to session %s, total photos: %d", session_id, context.user_data['photo_count'])
+    except Exception as e:
+        logger.error("Failed to save photo: %s", e)
+        if lang == 'ee':
+            msg = "Viga foto salvestamisel. Palun proovige uuesti."
+        elif lang == 'ru':
+            msg = "Ошибка сохранения фото. Пожалуйста, попробуйте еще раз."
+        else:
+            msg = "Error saving photo. Please try again."
+        await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
+        return PHOTOS
+>>>>>>> 1099954472c2c60950d7cfd6d061e3aa581ef4b9
 
     count = context.user_data['photo_count']
-    if lang == 'ee':
-        msg = f"Foto {count} saadetud."
-        if count < 3:
-            msg += f" Palun saatke veel {3 - count} fotot."
+    
+    # Check if reached 5-photo limit
+    if count >= 5:
+        if lang == 'ee':
+            msg = f"Maksimum 5 fotot saadetud. Vajutage 'Valmis', et jätkata."
+        elif lang == 'ru':
+            msg = f"Отправлено максимум 5 фото. Нажмите 'Готово' для продолжения."
         else:
-            msg += " Kui olete valmis, vajutage 'Valmis'."
-    elif lang == 'ru':
-        msg = f"Фото {count} получено."
-        if count < 3:
-            msg += f" Пожалуйста, отправьте ещё {3 - count} фото."
+            msg = f"Maximum 5 photos sent. Tap 'Done' to continue."
+        await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
+        return PHOTOS
+    
+    # A1 RULE: NO individual responses per photo - storage only
+    # Only respond for first photo to guide user
+    if count == 1:
+        if lang == 'ee':
+            msg = f"Foto {count} saadetud. Palun saatke veel {max(0, 3 - count)} fotot."
+        elif lang == 'ru':
+            msg = f"Отправлено фото {count}. Пожалуйста, пришлите еще {max(0, 3 - count)} фото."
         else:
-            msg += " Когда будете готовы, нажмите 'Готово'."
-    else:
-        msg = f"Photo {count} received."
-        if count < 3:
-            msg += f" Please send {3 - count} more photos."
-        else:
-            msg += " When finished, tap 'Done'."
-
-    await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
+            msg = f"Photo {count} sent. Please send {max(0, 3 - count)} more photos."
+        await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
     return PHOTOS

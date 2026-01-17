@@ -1,10 +1,16 @@
 import re
+import logging
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ApplicationHandlerStop
 
 from config import ADMIN_TELEGRAM_USER_ID
-from database.models import get_latest_leads, get_lead_by_id, create_offer, get_offer_by_id, update_offer_status
+from database.models import (
+    get_latest_leads, get_lead_by_id, create_offer, get_offer_by_id, 
+    update_offer_status, update_lead_status, delete_lead_by_id, get_lead_photos
+)
+
+logger = logging.getLogger(__name__)
 
 
 def _format_lead(lead: dict, compact: bool = False) -> str:
@@ -150,39 +156,50 @@ async def leads_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("No leads yet.")
         return
 
-    text = "\n\n".join(_format_lead(l) for l in leads)
-    if len(text) > 3500:
-        text = text[:3500] + "\n\n(truncated)"
+    # Reverse order: newest at bottom
+    leads = list(reversed(leads))
+
+    for lead in leads:
+        lead_id = lead.get("id")
+        status = lead.get("status", "pending")
+        status_emoji = {"pending": "🔵", "replied": "💬", "accepted": "✅", "rejected": "❌", "archived": "🗑️"}
+        badge = status_emoji.get(status, "🔵")
+        text = f"{badge} #{lead_id} {lead.get('plate_number')} · {lead.get('owner_name')} · {lead.get('phone_number')}"
+        reply_markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("💬 Vasta", callback_data=f"admin_reply:{lead_id}"),
+                InlineKeyboardButton("🗑️ Arhiveeri", callback_data=f"admin_archive:{lead_id}"),
+                InlineKeyboardButton("🗑️ Kustuta", callback_data=f"admin_delete:{lead_id}"),
+            ]
+        ])
+        await update.message.reply_text(text, reply_markup=reply_markup)
 
     if chat_type is not None and chat_type != "private":
-        try:
-            await context.bot.send_message(chat_id=ADMIN_TELEGRAM_USER_ID, text=text)
-            await update.message.reply_text("Saadan privaatsõnumisse.")
-        except Exception:
-            await update.message.reply_text("Cannot send private message. Open the bot in private chat first.")
-        return
-
-    await update.message.reply_text(text)
+        await update.message.reply_text("Saadan privaatsõnumisse.")
+    return
 
 
-def _parse_price(text: str):
-    m = re.search(r"([0-9]+(?:[\.,][0-9]+)?)", text or "")
-    if not m:
+def _parse_price(text: str) -> float | None:
+    """Extract the first number from a string (e.g. '200 eurot' -> 200)."""
+    # Strip everything but digits and decimal points
+    cleaned = re.sub(r'[^0-9.]', '', text.replace(' ', ''))
+    if not cleaned:
         return None
-    v = m.group(1).replace(",", ".")
+    
     try:
-        return float(v)
+        return float(cleaned)
     except ValueError:
         return None
 
 
 def _offer_text(lang: str, amount: float) -> str:
+    """Clean, official offer message"""
     amount_txt = f"{int(amount)}" if float(amount).is_integer() else f"{amount:.2f}".rstrip("0").rstrip(".")
     if lang == "ee":
-        return f"Meie pakkumine on {amount_txt}€. Sobib?"
+        return f"🏁 ROMUPUNKT\n\nAmetlik pakkumine: {amount_txt}€\n\nSisaldab lammutusteenust ja lammutustõendit."
     if lang == "ru":
-        return f"Наше предложение {amount_txt}€. Подходит?"
-    return f"Our offer is {amount_txt}€. Does it work for you?"
+        return f"🏁 ROMUPUNKT\n\nОфициальное предложение: {amount_txt}€\n\nВключает утилизацию и справку о ликвидации."
+    return f"🏁 ROMUPUNKT\n\nOfficial offer: {amount_txt}€\n\nIncludes dismantling service and destruction certificate."
 
 
 def _offer_keyboard(lang: str, offer_id: int) -> InlineKeyboardMarkup:
@@ -227,11 +244,38 @@ async def admin_archive_callback(update: Update, context: ContextTypes.DEFAULT_T
         await q.answer("Error", show_alert=True)
         return
 
-    from database.models import update_lead_status
     update_lead_status(lead_id, "archived")
     await q.answer("Arhiveeritud", show_alert=False)
     try:
         await q.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+async def admin_delete_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    if q is None:
+        return
+
+    user = update.effective_user
+    if user is None or ADMIN_TELEGRAM_USER_ID <= 0 or user.id != ADMIN_TELEGRAM_USER_ID:
+        await q.answer("Not authorized.", show_alert=True)
+        return
+
+    data = q.data or ""
+    if not data.startswith("admin_delete:"):
+        await q.answer()
+        return
+
+    try:
+        lead_id = int(data.split(":", 1)[1])
+    except Exception:
+        await q.answer("Error", show_alert=True)
+        return
+
+    delete_lead_by_id(lead_id)
+    await q.answer("Kustutatud", show_alert=False)
+    try:
+        await q.edit_message_text(text="🗑️ Kustutatud", reply_markup=None)
     except Exception:
         pass
 
@@ -256,17 +300,20 @@ async def admin_lead_action_callback(update: Update, context: ContextTypes.DEFAU
         await q.answer("Error", show_alert=True)
         return
 
-    lead = get_lead_by_id(lead_id)
-    if not lead:
-        await q.answer("Lead not found", show_alert=True)
-        return
-
-    context.chat_data["awaiting_price_lead_id"] = lead_id
+    context.chat_data["awaiting_price_lead_id"] = str(lead_id)
     await q.answer()
-    await q.message.reply_text(f"Kirjuta pakkumine (näiteks 800€) päringule #{lead_id}:")
+
+    from telegram import ForceReply
+    reply_markup = ForceReply(selective=True)
+    await context.bot.send_message(
+        chat_id=ADMIN_TELEGRAM_USER_ID,
+        text=f"Send your price offer for lead #{lead_id}:",
+        reply_markup=reply_markup
+    )
 
 
 async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin price input with robust parsing"""
     user = update.effective_user
     if user is None or ADMIN_TELEGRAM_USER_ID <= 0 or user.id != ADMIN_TELEGRAM_USER_ID:
         return
@@ -276,12 +323,13 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     raw_text = update.message.text if update.message else ""
-    if not re.search(r"\d", raw_text or ""):
+    if not raw_text:
         return
 
+    # Robust price parsing - strip non-digits
     amount = _parse_price(raw_text)
-    if amount is None:
-        await update.message.reply_text("Palun sisesta hind (näiteks 800€).")
+    if amount is None or amount <= 0:
+        await update.message.reply_text("Palun sisesta kehtiv hind (näiteks 800€ või 200).")
         raise ApplicationHandlerStop
 
     lead = get_lead_by_id(int(lead_id))
@@ -291,17 +339,20 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     offer_id = create_offer(int(lead_id), float(amount), status="sent")
-    from database.models import update_lead_status
     update_lead_status(int(lead_id), "replied")
     chat_id = lead.get("user_id")
     lang = lead.get("language")
+    
     try:
+        logger.info("Sending offer %s to user %s (lead %s)", amount, chat_id, lead_id)
         await context.bot.send_message(
             chat_id=chat_id,
             text=_offer_text(lang, float(amount)),
             reply_markup=_offer_keyboard(lang, offer_id),
         )
-    except Exception:
+        logger.info("Offer sent successfully to user %s", chat_id)
+    except Exception as e:
+        logger.exception("Failed to send offer to user %s (lead %s): %s", chat_id, lead_id, e)
         await update.message.reply_text("Ei saanud kasutajale pakkumist saata (võib-olla kasutaja on bot'i blokeerinud).")
         context.chat_data.pop("awaiting_price_lead_id", None)
         raise ApplicationHandlerStop
@@ -344,7 +395,6 @@ async def offer_response_callback(update: Update, context: ContextTypes.DEFAULT_
         return
 
     update_offer_status(offer_id, "accepted" if accepted else "rejected")
-    from database.models import update_lead_status
     update_lead_status(int(lead.get("id")), "accepted" if accepted else "rejected")
     await q.answer("OK")
 
