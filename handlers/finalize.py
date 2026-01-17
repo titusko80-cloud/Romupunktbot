@@ -36,6 +36,15 @@ def _thank_you_message(lang: str) -> str:
         "We also handle the certificate of destruction and deregistration paperwork."
     )
 
+def _share_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    if lang == "ee":
+        share_text = "🔗 Jaga sõbraga, kellel on romu hoovis"
+    elif lang == "ru":
+        share_text = "🔗 Поделись с другом, у которого машина на разборку"
+    else:
+        share_text = "🔗 Share with a friend who's scrapping a car"
+    return ReplyKeyboardMarkup([[KeyboardButton(share_text)]], resize_keyboard=True, is_persistent=True)
+
 
 def _display_completeness(lang: str, completeness: Optional[str]) -> Optional[str]:
     if completeness is None:
@@ -75,10 +84,29 @@ def _normalize_phone(phone_raw: str) -> Optional[str]:
     phone = phone_raw.strip().replace(" ", "")
     if phone.startswith("00"):
         phone = "+" + phone[2:]
+    # Accept any international format (+country code) or plain number, 7-15 digits
     if re.fullmatch(r"\+?[0-9]{7,15}", phone):
         return phone
     return None
 
+
+async def handle_share_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    lang = context.user_data.get('language', 'en')
+    bot_username = (context.bot.username or "")
+    if not bot_username:
+        await update.message.reply_text("Bot username not available.")
+        return
+    share_url = f"https://t.me/share?url=https://t.me/{bot_username}"
+    if lang == "ee":
+        msg = "Teada sõpru, kellel on vana auto romu hoovis! Saada neile kiirelt link."
+        btn_text = "🔗 Saada link"
+    elif lang == "ru":
+        msg = "Расскажи друзьям, у которых старая машина на разборку! Быстро отправь им ссылку."
+        btn_text = "🔗 Отправить ссылку"
+    else:
+        msg = "Tell friends who have an old car to scrap! Send them the link quick."
+        btn_text = "🔗 Send link"
+    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(btn_text, url=share_url)]]))
 
 async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     phone_raw = update.message.text
@@ -86,11 +114,11 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     if phone is None:
         if context.user_data.get("language") == "ee":
-            msg = "Palun sisestage korrektne telefoninumber (näiteks +3725xxxxxxx):"
+            msg = "Palun sisestage korrektne telefoninumber (näiteks +3725xxxxxxx või 5xxxxxxx):"
         elif context.user_data.get("language") == "ru":
-            msg = "Введите корректный номер телефона (например +3725xxxxxxx):"
+            msg = "Введите корректный номер телефона (например +3725xxxxxxx или 5xxxxxxx):"
         else:
-            msg = "Please enter a valid phone number (example +3725xxxxxxx):"
+            msg = "Please enter a valid phone number (example +3725xxxxxxx or 5xxxxxxx):"
 
         await update.message.reply_text(msg, reply_markup=_new_inquiry_keyboard(context.user_data.get("language")))
         return PHONE
@@ -203,14 +231,15 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         elif lat is not None and lon is not None:
             msg_lines.append(f"{labels['location']}: {lat}, {lon}")
 
-        reply_markup = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"admin_reply:{lead_id}"),
-                    InlineKeyboardButton("📞 Helista kohe", url=f"tel:{phone}"),
-                ]
-            ]
-        )
+        # Prepare Call button only if phone looks like a full international number
+        call_button = None
+        if phone and re.fullmatch(r"\+?[0-9]{10,15}", phone):
+            call_button = InlineKeyboardButton("📞 Helista kohe", url=f"tel:{phone}")
+
+        if call_button:
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"admin_reply:{lead_id}"), call_button], [InlineKeyboardButton("🗑️ Arhiveeri", callback_data=f"admin_archive:{lead_id}")]])
+        else:
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"admin_reply:{lead_id}")], [InlineKeyboardButton("🗑️ Arhiveeri", callback_data=f"admin_archive:{lead_id}")]])
 
         try:
             await context.bot.send_message(
@@ -257,7 +286,7 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     else:
         msg = _thank_you_message("en")
 
-    await update.message.reply_text(msg)
+    await update.message.reply_text(msg, reply_markup=_share_keyboard(context.user_data.get("language", "en")))
 
     context.user_data.clear()
 

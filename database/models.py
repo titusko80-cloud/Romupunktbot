@@ -177,7 +177,8 @@ def get_latest_leads(limit: int = 10):
             photos,
             phone_number,
             telegram_username,
-            user_id
+            user_id,
+            status
         FROM leads
         ORDER BY id DESC
         LIMIT ?
@@ -266,15 +267,3 @@ def get_lead_by_user_id(user_id):
     conn.close()
     
     return lead
-
-def update_lead_status(lead_id, status):
-    """Update lead status"""
-    conn = sqlite3.connect('romupunkt.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        UPDATE leads SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    ''', (status, lead_id))
-    
-    conn.commit()
-    conn.close()

@@ -7,7 +7,7 @@ from config import ADMIN_TELEGRAM_USER_ID
 from database.models import get_latest_leads, get_lead_by_id, create_offer, get_offer_by_id, update_offer_status
 
 
-def _format_lead(lead: dict) -> str:
+def _format_lead(lead: dict, compact: bool = False) -> str:
     lead_id = lead.get("id")
     created_at = lead.get("created_at")
     plate = lead.get("plate_number")
@@ -25,6 +25,15 @@ def _format_lead(lead: dict) -> str:
     lon = lead.get("location_longitude")
     photos = (lead.get("photos") or "").strip()
     photos_count = len([p for p in photos.split(",") if p]) if photos else 0
+    status = lead.get("status", "pending")
+
+    # Status badge
+    status_emoji = {"pending": "🔵", "replied": "💬", "accepted": "✅", "rejected": "❌", "archived": "🗑️"}
+    badge = status_emoji.get(status, "🔵")
+
+    if compact:
+        # One-line summary for quick scanning
+        return f"{badge} #{lead_id} {plate} · {name} · {phone} ({photos_count}📷)"
 
     if completeness in ("complete", "missing"):
         if lang == "ee":
@@ -35,7 +44,7 @@ def _format_lead(lead: dict) -> str:
             completeness = "✅ Complete" if completeness == "complete" else "❌ Missing parts"
 
     if lang == "ee":
-        title = f"Päring #{lead_id} ({created_at})"
+        title = f"{badge} Päring #{lead_id} ({created_at})"
         labels = {
             "plate": "Number",
             "name": "Nimi",
@@ -52,7 +61,7 @@ def _format_lead(lead: dict) -> str:
         yes_txt = "Jah"
         no_txt = "Ei"
     elif lang == "ru":
-        title = f"Заявка #{lead_id} ({created_at})"
+        title = f"{badge} Заявка #{lead_id} ({created_at})"
         labels = {
             "plate": "Номер",
             "name": "Имя",
@@ -69,7 +78,7 @@ def _format_lead(lead: dict) -> str:
         yes_txt = "Да"
         no_txt = "Нет"
     else:
-        title = f"Lead #{lead_id} ({created_at})"
+        title = f"{badge} Lead #{lead_id} ({created_at})"
         labels = {
             "plate": "Plate",
             "name": "Name",
@@ -197,6 +206,35 @@ def _offer_keyboard(lang: str, offer_id: int) -> InlineKeyboardMarkup:
     )
 
 
+async def admin_archive_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    if q is None:
+        return
+
+    user = update.effective_user
+    if user is None or ADMIN_TELEGRAM_USER_ID <= 0 or user.id != ADMIN_TELEGRAM_USER_ID:
+        await q.answer("Not authorized.", show_alert=True)
+        return
+
+    data = q.data or ""
+    if not data.startswith("admin_archive:"):
+        await q.answer()
+        return
+
+    try:
+        lead_id = int(data.split(":", 1)[1])
+    except Exception:
+        await q.answer("Error", show_alert=True)
+        return
+
+    from database.models import update_lead_status
+    update_lead_status(lead_id, "archived")
+    await q.answer("Arhiveeritud", show_alert=False)
+    try:
+        await q.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
 async def admin_lead_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     if q is None:
@@ -253,6 +291,8 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     offer_id = create_offer(int(lead_id), float(amount), status="sent")
+    from database.models import update_lead_status
+    update_lead_status(int(lead_id), "replied")
     chat_id = lead.get("user_id")
     lang = lead.get("language")
     try:
@@ -304,6 +344,8 @@ async def offer_response_callback(update: Update, context: ContextTypes.DEFAULT_
         return
 
     update_offer_status(offer_id, "accepted" if accepted else "rejected")
+    from database.models import update_lead_status
+    update_lead_status(int(lead.get("id")), "accepted" if accepted else "rejected")
     await q.answer("OK")
 
     try:
@@ -337,11 +379,31 @@ async def offer_response_callback(update: Update, context: ContextTypes.DEFAULT_
         plate = lead.get("plate_number")
         phone = lead.get("phone_number")
         amount = offer.get("offer_amount")
-        status_txt = "NÕUS" if accepted else "EI SOBI"
+        lang = lead.get("language")
+        if accepted:
+            if lang == "ee":
+                status_txt = "NÕUS"
+                pre = "Vastus pakkumisele"
+            elif lang == "ru":
+                status_txt = "СОГЛАСЕН"
+                pre = "Ответ на предложение"
+            else:
+                status_txt = "ACCEPTED"
+                pre = "Response to offer"
+        else:
+            if lang == "ee":
+                status_txt = "EI SOBI"
+                pre = "Vastus pakkumisele"
+            elif lang == "ru":
+                status_txt = "НЕ ПОДОШЛО"
+                pre = "Ответ на предложение"
+            else:
+                status_txt = "REJECTED"
+                pre = "Response to offer"
         try:
             await context.bot.send_message(
                 chat_id=ADMIN_TELEGRAM_USER_ID,
-                text=f"Vastus pakkumisele #{offer_id} (päring #{lead.get('id')}): {status_txt}\nNumber: {plate}\nTelefon: {phone}\nPakkumine: {amount}€",
+                text=f"{pre} #{offer_id} (päring #{lead.get('id')}): {status_txt}\nNumber: {plate}\nTelefon: {phone}\nPakkumine: {amount}€",
             )
         except Exception:
             pass

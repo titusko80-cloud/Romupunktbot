@@ -65,11 +65,11 @@ async def photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return PHOTOS
 
     if lang == 'ee':
-        msg = "Palun saatke foto(d). Kui olete valmis, vajutage 'Valmis'."
+        msg = "Palun saatke foto(d). Kui olete valmis (vähemalt 3 fotot), vajutage 'Valmis'."
     elif lang == 'ru':
-        msg = "Пожалуйста, отправьте фото. Когда будете готовы, нажмите 'Готово'."
+        msg = "Пожалуйста, отправьте фото. Когда будете готовы (минимум 3 фото), нажмите 'Готово'."
     else:
-        msg = "Please send photo(s). When finished, tap 'Done'."
+        msg = "Please send photo(s). When finished (at least 3 photos), tap 'Done'."
 
     await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
     return PHOTOS

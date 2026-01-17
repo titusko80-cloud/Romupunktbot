@@ -11,11 +11,11 @@ from telegram import BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler
 from config import BOT_TOKEN, ADMIN_TELEGRAM_USER_ID
 from handlers.start import start, language_selection, welcome_continue
-from handlers.admin import leads_command, admin_lead_action_callback, offer_response_callback, admin_price_message
+from handlers.admin import leads_command, admin_lead_action_callback, offer_response_callback, admin_price_message, admin_archive_callback
 from handlers.vehicle import vehicle_info, plate_validation, owner_name, owner_confirm, curb_weight, missing_parts
 from handlers.photos import photo_collection, photo_text
 from handlers.logistics import logistics_selection, location_received
-from handlers.finalize import phone_number
+from handlers.finalize import phone_number, handle_share_button
 from database.models import init_db
 from states import (
     LANGUAGE,
@@ -127,7 +127,11 @@ def main():
 
     from telegram.ext import CallbackQueryHandler
     application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r'^admin_reply:'))
+    application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r'^admin_archive:'))
     application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r'^offer_(accept|reject):'))
+
+    # Share bot button handler (outside conversation)
+    application.add_handler(MessageHandler(filters.Regex(r'🔗 (Jaga sõbraga, kellel on romu hoovis|Поделись с другом, у которого машина на разборку|Share with a friend who\'s scrapping a car)'), handle_share_button))
     
     # Start the Bot
     application.run_polling()
