@@ -5,6 +5,13 @@ A specialized Telegram bot for collecting vehicle data and handling
 legal requirements for car dismantling in Estonia.
 """
 
+# 🔥 DEBUG: Find actual running directory
+import sys
+print("🔥 BOT.PY PATH:", __file__)
+print("🔥 PYTHONPATH:")
+for p in sys.path:
+    print("   ", p)
+
 import asyncio
 import logging
 from telegram import BotCommand
