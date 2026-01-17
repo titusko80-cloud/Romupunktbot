@@ -229,6 +229,7 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone_number: str) -> None:
     """Send professional Lead Card with media group and rich HTML caption"""
     # 🔥 PROVE THIS FUNCTION IS EXECUTING - CRASH TEST
+    print("🔥🔥🔥 SEND_LEAD_CARD_NEW_VERSION_EXECUTED 🔥🔥🔥")
     raise RuntimeError("SEND_LEAD_CARD_NEW_VERSION_EXECUTED")
     
     if not ADMIN_TELEGRAM_USER_ID or ADMIN_TELEGRAM_USER_ID <= 0:
