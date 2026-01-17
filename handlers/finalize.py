@@ -213,6 +213,11 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     
     # CRITICAL: Send live Lead Card to admin IMMEDIATELY after database commit
     logger.info("Triggering live admin notification for lead %d (no photos)", lead_id)
+    
+    # 🔥 DEBUG: Find the real file
+    import inspect
+    logger.error("🔥 PHONE_NUMBER FILE: %s", inspect.getfile(inspect.currentframe()))
+    
     await send_lead_card(context, lead_id, full_phone)
 
     if context.user_data.get("language") == "ee":
