@@ -228,6 +228,10 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone_number: str) -> None:
     """Send professional Lead Card with media group and rich HTML caption"""
+    # 🔥 DEBUG: Find the real file
+    import inspect
+    logger.error("🔥 ADMIN NOTIFIER FILE: %s", inspect.getfile(inspect.currentframe()))
+    
     # 🔥🔥🔥 send_lead_card ACTIVE — THIS MUST APPEAR 🔥🔥🔥
     logger.error("🔥🔥🔥 send_lead_card ACTIVE — THIS MUST APPEAR 🔥🔥🔥")
     print("🔥🔥🔥 send_lead_card ACTIVE — THIS MUST APPEAR 🔥🔥🔥")
