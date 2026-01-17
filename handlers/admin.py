@@ -1,10 +1,16 @@
 import re
+import logging
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ApplicationHandlerStop
 
 from config import ADMIN_TELEGRAM_USER_ID
-from database.models import get_latest_leads, get_lead_by_id, create_offer, get_offer_by_id, update_offer_status, update_lead_status, delete_lead_by_id, get_lead_photos
+from database.models import (
+    get_latest_leads, get_lead_by_id, create_offer, get_offer_by_id, 
+    update_offer_status, update_lead_status, delete_lead_by_id, get_lead_photos
+)
+
+logger = logging.getLogger(__name__)
 
 
 def _format_lead(lead: dict, compact: bool = False) -> str:
@@ -175,14 +181,15 @@ async def leads_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 def _parse_price(text: str) -> float | None:
     """Extract the first number from a string (e.g. '200 eurot' -> 200)."""
-    import re
-    match = re.search(r"\d+(?:\.\d+)?", text.replace(" ", ""))
-    if match:
-        try:
-            return float(match.group())
-        except ValueError:
-            return None
-    return None
+    # Strip everything but digits and decimal points
+    cleaned = re.sub(r'[^0-9.]', '', text.replace(' ', ''))
+    if not cleaned:
+        return None
+    
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
 
 
 def _offer_text(lang: str, amount: float) -> str:
@@ -306,6 +313,7 @@ async def admin_lead_action_callback(update: Update, context: ContextTypes.DEFAU
 
 
 async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin price input with robust parsing"""
     user = update.effective_user
     if user is None or ADMIN_TELEGRAM_USER_ID <= 0 or user.id != ADMIN_TELEGRAM_USER_ID:
         return
@@ -315,12 +323,13 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     raw_text = update.message.text if update.message else ""
-    if not re.search(r"\d", raw_text or ""):
+    if not raw_text:
         return
 
+    # Robust price parsing - strip non-digits
     amount = _parse_price(raw_text)
-    if amount is None:
-        await update.message.reply_text("Palun sisesta hind (näiteks 800€).")
+    if amount is None or amount <= 0:
+        await update.message.reply_text("Palun sisesta kehtiv hind (näiteks 800€ või 200).")
         raise ApplicationHandlerStop
 
     lead = get_lead_by_id(int(lead_id))
@@ -333,6 +342,7 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     update_lead_status(int(lead_id), "replied")
     chat_id = lead.get("user_id")
     lang = lead.get("language")
+    
     try:
         logger.info("Sending offer %s to user %s (lead %s)", amount, chat_id, lead_id)
         await context.bot.send_message(

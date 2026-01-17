@@ -3,16 +3,14 @@
 import logging
 import re
 from typing import Optional
-from telegram import Update
-from telegram.ext import ContextTypes, ConversationHandler
-
 from pathlib import Path
-from telegram import InputMediaPhoto
+from telegram import Update, InputMediaPhoto
+from telegram.ext import ContextTypes, ConversationHandler
 from telegram import ReplyKeyboardMarkup, KeyboardButton
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 from config import ADMIN_TELEGRAM_USER_ID
-from database.models import save_lead
+from database.models import save_lead, get_lead_photos, get_lead_by_id
 from states import PHONE
 
 
@@ -179,7 +177,7 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             move_session_photos_to_lead(user_id, session_id, lead_id)
             
             # Send professional Lead Card to admin
-            await _send_admin_notification(context, lead_id, full_phone)
+            await send_lead_card(context, lead_id, full_phone)
             
             # Send thank you message
             lang = context.user_data.get("language")
@@ -201,7 +199,7 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     logger.info("Saved lead with ID %s for user %s", lead_id, user.id)
 
     # Send admin notification immediately (text-only since no photos)
-    await _send_admin_notification(context, lead_id, full_phone)
+    await send_lead_card(context, lead_id, full_phone)
 
     if context.user_data.get("language") == "ee":
         msg = "Aitäh! Võtame teiega ühendust pakkumisega."
@@ -214,10 +212,8 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     context.user_data.clear()
     return ConversationHandler.END
 
-async def _send_admin_notification(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone_number: str) -> None:
-    """Send admin notification as Media Group with Lead Card caption and control message"""
-    from database.models import get_lead_photos, get_lead_by_id
-    
+async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone_number: str) -> None:
+    """Send professional Lead Card with media group and rich HTML caption"""
     if not ADMIN_TELEGRAM_USER_ID or ADMIN_TELEGRAM_USER_ID <= 0:
         logger.warning("ADMIN_TELEGRAM_USER_ID not set or invalid")
         return
@@ -231,50 +227,60 @@ async def _send_admin_notification(context: ContextTypes.DEFAULT_TYPE, lead_id: 
     photos = get_lead_photos(lead_id)
     logger.info(f"Sending lead {lead_id} with {len(photos)} photos to admin.")
     
-    # Debug: Log photo file_ids
-    if photos:
-        logger.info("Photo file_ids: %s", [p["file_id"] for p in photos])
-    else:
-        logger.warning("No photos found for lead %d", lead_id)
-    
-    # Build Lead Card caption with HTML formatting
+    # Build professional Lead Card caption with HTML formatting
     if lang == "ee":
-        title = f"<b>Uus päring #{lead_id}</b>"
+        title = f"<b>🏁 Uus päring #{lead_id}</b>"
         labels = {"plate": "Number", "name": "Nimi", "phone": "Telefon", "weight": "Tühimass"}
     elif lang == "ru":
-        title = f"<b>Новая заявка #{lead_id}</b>"
+        title = f"<b>🏁 Новая заявка #{lead_id}</b>"
         labels = {"plate": "Номер", "name": "Имя", "phone": "Телефон", "weight": "Масса"}
     else:
-        title = f"<b>New inquiry #{lead_id}</b>"
+        title = f"<b>🏁 New inquiry #{lead_id}</b>"
         labels = {"plate": "Plate", "name": "Name", "phone": "Phone", "weight": "Weight"}
     
     # Make phone clickable
     phone_link = f'<a href="tel:{phone_number}">{phone_number}</a>'
     
+    # Build rich HTML caption
     caption_lines = [
         title,
-        f"<b>{labels['plate']}:</b> <code>{lead.get('plate_number')}</code>",
-        f"<b>{labels['name']}:</b> {lead.get('owner_name')}",
-        f"<b>{labels['phone']}:</b> {phone_link}",
-        f"<b>{labels['weight']}:</b> {lead.get('curb_weight')}kg",
+        "",
+        f"<b>📋 {labels['plate']}:</b> <code>{lead.get('plate_number')}</code>",
+        f"<b>👤 {labels['name']}:</b> {lead.get('owner_name')}",
+        f"<b>📞 {labels['phone']}:</b> {phone_link}",
+        f"<b>⚖️ {labels['weight']}:</b> {lead.get('curb_weight')}kg",
     ]
     
     # Add completeness if available
     completeness = lead.get('completeness')
     if completeness:
-        caption_lines.append(f"<b>Komplektsus:</b> {completeness}")
+        if completeness == "complete":
+            comp_text = "✅ Täielik" if lang == "ee" else "✅ Полный" if lang == "ru" else "✅ Complete"
+        else:
+            comp_text = "❌ Puudub" if lang == "ee" else "❌ Не полный" if lang == "ru" else "❌ Missing parts"
+        caption_lines.append(f"<b>🔧 Komplektsus:</b> {comp_text}")
     
-    # ALWAYS use send_media_group if photos exist
+    # Add transport info
+    transport = lead.get('transport_method')
+    if transport:
+        caption_lines.append(f"<b>🚚 Transport:</b> {transport}")
+    
+    # Add photo count
+    caption_lines.append(f"<b>📷 Fotod:</b> {len(photos)}")
+    
+    caption = "\n".join(caption_lines)
+    
+    # Send media group if photos exist
     if photos:
         media = []
         # First photo gets the caption
         media.append(InputMediaPhoto(
             media=photos[0]["file_id"], 
-            caption="\n".join(caption_lines), 
+            caption=caption, 
             parse_mode="HTML"
         ))
-        # Add remaining photos without caption
-        for photo in photos[1:10]:  # Limit to 10 photos max
+        # Add remaining photos without caption (max 10 total)
+        for photo in photos[1:10]:
             media.append(InputMediaPhoto(media=photo["file_id"]))
         
         try:
@@ -288,7 +294,7 @@ async def _send_admin_notification(context: ContextTypes.DEFAULT_TYPE, lead_id: 
             # Fallback to text message if media group fails
             await context.bot.send_message(
                 chat_id=ADMIN_TELEGRAM_USER_ID,
-                text="\n".join(caption_lines),
+                text=caption,
                 parse_mode="HTML"
             )
     else:
@@ -296,25 +302,24 @@ async def _send_admin_notification(context: ContextTypes.DEFAULT_TYPE, lead_id: 
         logger.info(f"No photos for lead {lead_id}, sending text-only message")
         await context.bot.send_message(
             chat_id=ADMIN_TELEGRAM_USER_ID,
-            text="\n".join(caption_lines),
+            text=caption,
             parse_mode="HTML"
         )
     
-    # Send control message with buttons (always separate)
+    # Send control buttons as separate message
     reply_markup = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("💸 Send Price", callback_data=f"admin_reply:{lead_id}"),
-            InlineKeyboardButton("📂 Archive", callback_data=f"admin_archive:{lead_id}"),
-            InlineKeyboardButton("👤 View Profile", callback_data=f"admin_profile:{lead_id}")
+            InlineKeyboardButton("💸 Vasta pakkumisega", callback_data=f"admin_reply:{lead_id}"),
+            InlineKeyboardButton("📂 Arhiveeri", callback_data=f"admin_archive:{lead_id}"),
         ]
     ])
     
     await context.bot.send_message(
         chat_id=ADMIN_TELEGRAM_USER_ID,
-        text=f"Actions for lead #{lead_id}",
+        text=f"Toimingud päringule #{lead_id}:",
         reply_markup=reply_markup
     )
-    logger.info(f"✅ Admin notification completed for lead {lead_id}")
+    logger.info(f"✅ Lead Card sent successfully for lead {lead_id}")
 
 async def phone_country_code(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     choice = update.message.text.strip()

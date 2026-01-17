@@ -50,42 +50,66 @@ def main():
     persistence = PicklePersistence(filepath='bot_data.pkl', on_flush=False)
     
     async def _post_init(app: Application) -> None:
+        """Set up bot descriptions and commands"""
         try:
-            from telegram import BotCommand
-            from telegram.constants import BotCommandScopeType
-            from telegram import BotCommandScopeAllPrivateChats
+            # Set professional multilingual descriptions for empty chat window
+            descriptions = {
+                'et': '🏁 ROMUPUNKT: Müü oma auto kiirelt! 🏎️ Saa pakkumine 60 sekundiga ja ametlik lammutustõend. Vajuta START, et alustada.',
+                'ru': '🏁 ROMUPUNKT: Продайте свою машину быстро! 🏎️ Получите предложение за 60 секунд и официальную справку об утилизации. Нажмите START, чтобы начать.',
+                'en': '🏁 ROMUPUNKT: Sell your car fast! 🏎️ Get a price quote in 60 seconds and an official destruction certificate. Press START to begin.'
+            }
             
-            # Set welcome descriptions for empty chat window
-            description = "ROMUPUNKT: Sell your car fast! 🏎️ Get a price quote in 60 seconds and an official destruction certificate. Press START to begin."
-            
-            # Set description for all languages
-            for lang_code in ['et', 'ru', 'en']:
+            # Set descriptions for all languages
+            for lang_code, desc in descriptions.items():
                 try:
-                    await application.bot.set_my_description(description=description, language_code=lang_code)
+                    await application.bot.set_my_description(description=desc, language_code=lang_code)
                     logger.info(f"✅ Bot description set for language: {lang_code}")
                 except Exception as e:
                     logger.warning(f"❌ Failed to set description for {lang_code}: {e}")
             
-            # Set profile bio
-            about_text = (
-                "🏁 ROMUPUNKT\n\n"
-                "Official vehicle dismantling service in Estonia.\n"
-                "We buy old, damaged, and unwanted cars.\n"
-                "✅ Fast price quotes\n"
-                "✅ Free vehicle pickup\n"
-                "✅ Official destruction certificate\n"
-                "✅ Instant payment\n\n"
-                "Contact us for a quote today!"
-            )
+            # Set professional multilingual profile bio
+            about_texts = {
+                'et': (
+                    '🏁 ROMUPUNKT\n\n'
+                    'Ametlik sõidukite lammutus teenus Eestis.\n'
+                    'Ostame vanu, vigastatud ja soovimatuid autosid.\n'
+                    '✅ Kiired pakkumised\n'
+                    '✅ Tasuta sõiduki äravedu\n'
+                    '✅ Ametlik lammutustõend\n'
+                    '✅ Kohene makse\n\n'
+                    'Võta ühendust pakkumise saamiseks!'
+                ),
+                'ru': (
+                    '🏁 ROMUPUNKT\n\n'
+                    'Официальная услуга утилизации автомобилей в Эстонии.\n'
+                    'Покупаем старые, поврежденные и ненужные автомобили.\n'
+                    '✅ Быстрые предложения\n'
+                    '✅ Бесплатная эвакуация автомобиля\n'
+                    '✅ Официальная справка об утилизации\n'
+                    '✅ Мгновенная оплата\n\n'
+                    'Свяжитесь с нами для получения предложения!'
+                ),
+                'en': (
+                    '🏁 ROMUPUNKT\n\n'
+                    'Official vehicle dismantling service in Estonia.\n'
+                    'We buy old, damaged, and unwanted cars.\n'
+                    '✅ Fast price quotes\n'
+                    '✅ Free vehicle pickup\n'
+                    '✅ Official destruction certificate\n'
+                    '✅ Instant payment\n\n'
+                    'Contact us for a quote today!'
+                )
+            }
             
-            for lang_code in ['et', 'ru', 'en']:
+            for lang_code, about_text in about_texts.items():
                 try:
                     await application.bot.set_my_about_text(about_text=about_text, language_code=lang_code)
                     logger.info(f"✅ Bot about text set for language: {lang_code}")
                 except Exception as e:
                     logger.warning(f"❌ Failed to set about text for {lang_code}: {e}")
+                    
         except Exception as e:
-            logger.warning("Failed to set bot description: %s", e)
+            logger.warning("Failed to set bot descriptions: %s", e)
         
         # Set commands for all users
         try:

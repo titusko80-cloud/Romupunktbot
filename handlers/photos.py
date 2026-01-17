@@ -39,7 +39,7 @@ def _done_keyboard(lang: str) -> ReplyKeyboardMarkup:
 
 async def _ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Ask for phone number and send admin notification if lead exists"""
-    from handlers.finalize import _send_admin_notification
+    from handlers.finalize import send_lead_card
     
     lang = context.user_data.get('language')
     lead_id = context.user_data.get('lead_id')
@@ -49,7 +49,7 @@ async def _ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         phone = context.user_data.get('phone_number')
         if phone:
             logger.info("Sending admin notification for existing lead %d after photos", lead_id)
-            await _send_admin_notification(context, lead_id, phone)
+            await send_lead_card(context, lead_id, phone)
     
     if lang == 'ee':
         msg = "Täname! Viimane samm:\n\nPalun sisestage oma telefoninumber, et me saaksime teile kiiresti pakkumise teha:"
