@@ -96,198 +96,252 @@ async def handle_share_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not bot_username:
         await update.message.reply_text("Bot username not available.")
         return
+    # Remove @ if present
+    bot_username = bot_username.lstrip('@')
     share_url = f"https://t.me/share?url=https://t.me/{bot_username}"
     if lang == "ee":
-        msg = "Teada sõpru, kellel on vana auto romu hoovis! Saada neile kiirelt link."
-        btn_text = "🔗 Saada link"
+        msg = f"Teada sõpru, kellel on vana auto romu hoovis! Saada neile kiirelt link:\nhttps://t.me/{bot_username}"
+        btn_text = "🔗 Jagada Telegramis"
     elif lang == "ru":
-        msg = "Расскажи друзьям, у которых старая машина на разборку! Быстро отправь им ссылку."
-        btn_text = "🔗 Отправить ссылку"
+        msg = f"Расскажи друзьям, у которых старая машина на разборку! Быстро отправь им ссылку:\nhttps://t.me/{bot_username}"
+        btn_text = "🔗 Поделиться в Telegram"
     else:
-        msg = "Tell friends who have an old car to scrap! Send them the link quick."
-        btn_text = "🔗 Send link"
-    await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(btn_text, url=share_url)]]))
+        msg = f"Tell friends who have an old car to scrap! Send them the link quick:\nhttps://t.me/{bot_username}"
+        btn_text = "🔗 Share on Telegram"
+    try:
+        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(btn_text, url=share_url)]]))
+    except Exception:
+        # Fallback: just send the link without the share button
+        await update.message.reply_text(msg)
+
+def _phone_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    if lang == "ee":
+        keyboard = [
+            [KeyboardButton("🇪🇪 +372"), KeyboardButton("🇫🇮 +358"), KeyboardButton("🇱🇻 +371")],
+            [KeyboardButton("🇷🇺 +7"), KeyboardButton("🇱🇹 +370"), KeyboardButton("🇸🇪 +46")],
+        ]
+        prompt = "Vali riigi kood:"
+    elif lang == "ru":
+        keyboard = [
+            [KeyboardButton("🇪🇪 +372"), KeyboardButton("🇫🇮 +358"), KeyboardButton("🇱🇻 +371")],
+            [KeyboardButton("🇷🇺 +7"), KeyboardButton("🇱🇹 +370"), KeyboardButton("🇸🇪 +46")],
+        ]
+        prompt = "Выберите код страны:"
+    else:
+        keyboard = [
+            [KeyboardButton("🇪🇪 +372"), KeyboardButton("🇫🇮 +358"), KeyboardButton("🇱🇻 +371")],
+            [KeyboardButton("🇷🇺 +7"), KeyboardButton("🇱🇹 +370"), KeyboardButton("🇸🇪 +46")],
+        ]
+        prompt = "Choose country code:"
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True), prompt
 
 async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    phone_raw = update.message.text
-    phone = _normalize_phone(phone_raw)
+    # First time: show country picker
+    if "phone_country_code" not in context.user_data:
+        keyboard, prompt = _phone_keyboard(context.user_data.get("language", "en"))
+        await update.message.reply_text(prompt, reply_markup=keyboard)
+        return PHONE
 
-    if phone is None:
+    # After country selected: expect local number
+    phone_raw = update.message.text.strip()
+    country_code = context.user_data.get("phone_country_code", "")
+    full_phone = f"{country_code}{phone_raw.replace(' ', '')}"
+    logger.info("phone_number received: %s, full_phone: %s", phone_raw, full_phone)
+    if not re.fullmatch(r"\+[0-9]{10,15}", full_phone):
+        logger.warning("Phone validation failed for %s", full_phone)
         if context.user_data.get("language") == "ee":
-            msg = "Palun sisestage korrektne telefoninumber (näiteks +3725xxxxxxx või 5xxxxxxx):"
+            msg = "Palun sisestage korrektne number (näiteks 51234567):"
         elif context.user_data.get("language") == "ru":
-            msg = "Введите корректный номер телефона (например +3725xxxxxxx или 5xxxxxxx):"
+            msg = "Введите корректный номер (например 51234567):"
         else:
-            msg = "Please enter a valid phone number (example +3725xxxxxxx or 5xxxxxxx):"
-
+            msg = "Please enter a valid number (example 51234567):"
         await update.message.reply_text(msg, reply_markup=_new_inquiry_keyboard(context.user_data.get("language")))
         return PHONE
 
-    context.user_data["phone_number"] = phone
+    # Save phone number to context
+    context.user_data["phone_number"] = full_phone
+    logger.info("phone_number set to: %s", full_phone)
 
-    if context.user_data.get("lead_id") is not None:
-        lang = context.user_data.get("language")
-        await update.message.reply_text(_thank_you_message(lang), reply_markup=_new_inquiry_keyboard(lang))
-        context.user_data.clear()
-        return ConversationHandler.END
+    # Check if we have session photos
+    session_id = context.user_data.get('session_id')
+    if session_id:
+        from database.models import get_session_photos, move_session_photos_to_lead
+        user_id = update.effective_user.id
+        photos = get_session_photos(user_id, session_id)
+        
+        if photos:
+            # Create lead with all data
+            logger.info("Creating lead with %d session photos", len(photos))
+            user = update.effective_user
+            lead_id = save_lead(context.user_data, user.id, getattr(user, "username", None))
+            
+            # Move photos from session to permanent storage
+            move_session_photos_to_lead(user_id, session_id, lead_id)
+            
+            # Send professional Lead Card to admin
+            await _send_admin_notification(context, lead_id, full_phone)
+            
+            # Send thank you message
+            lang = context.user_data.get("language")
+            if lang == "ee":
+                msg = "Aitäh! Võtame teiega ühendust pakkumisega."
+            elif lang == "ru":
+                msg = "Спасибо! Мы свяжемся с вами с предложением."
+            else:
+                msg = "Thank you! We'll contact you with an offer."
+            
+            await update.message.reply_text(msg, reply_markup=_new_inquiry_keyboard(lang))
+            context.user_data.clear()
+            return ConversationHandler.END
 
+    # No photos, create lead now
     user = update.effective_user
     lead_id = save_lead(context.user_data, user.id, getattr(user, "username", None))
     context.user_data["lead_id"] = lead_id
     logger.info("Saved lead with ID %s for user %s", lead_id, user.id)
 
-    if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
-        logger.info("Attempting to send admin notification for lead %s. ADMIN_TELEGRAM_USER_ID=%s", lead_id, ADMIN_TELEGRAM_USER_ID)
-        plate = context.user_data.get("plate_number")
-        name = context.user_data.get("owner_name")
-        weight = context.user_data.get("curb_weight")
-        lang = context.user_data.get("language")
-        completeness = _display_completeness(lang, context.user_data.get("completeness"))
-        is_owner = context.user_data.get("is_owner")
-        missing_parts = context.user_data.get("missing_parts")
-        transport = context.user_data.get("transport_method")
-        needs_tow = context.user_data.get("needs_tow")
-        tow_address = context.user_data.get("tow_address")
-        loc = context.user_data.get("location") or {}
-        lat = loc.get("latitude")
-        lon = loc.get("longitude")
-        photos = context.user_data.get("photos") or []
-
-        username = getattr(user, "username", None)
-        user_line = f"@{username}" if username else str(user.id)
-
-        if lang == "ee":
-            title = f"Uus päring #{lead_id}"
-            labels = {
-                "plate": "Number",
-                "name": "Nimi",
-                "is_owner": "Omanik",
-                "phone": "Telefon",
-                "weight": "Tühimass",
-                "completeness": "Komplektsus",
-                "missing_parts": "Puudub",
-                "transport": "Transport",
-                "needs_tow": "Buksiir",
-                "photos": "Fotod",
-                "from": "Kasutaja",
-                "location": "Asukoht",
-            }
-        elif lang == "ru":
-            title = f"Новая заявка #{lead_id}"
-            labels = {
-                "plate": "Номер",
-                "name": "Имя",
-                "is_owner": "Владелец",
-                "phone": "Телефон",
-                "weight": "Масса",
-                "completeness": "Комплектность",
-                "missing_parts": "Отсутствует",
-                "transport": "Доставка",
-                "needs_tow": "Эвакуатор",
-                "photos": "Фото",
-                "from": "Пользователь",
-                "location": "Локация",
-            }
-        else:
-            title = f"New inquiry #{lead_id}"
-            labels = {
-                "plate": "Plate",
-                "name": "Name",
-                "is_owner": "Owner",
-                "phone": "Phone",
-                "weight": "Weight",
-                "completeness": "Completeness",
-                "missing_parts": "Missing",
-                "transport": "Transport",
-                "needs_tow": "Needs tow",
-                "photos": "Photos",
-                "from": "From",
-                "location": "Location",
-            }
-
-        msg_lines = [
-            title,
-            f"{labels['plate']}: {plate}",
-            f"{labels['name']}: {name}",
-            f"{labels['phone']}: {phone}",
-            f"{labels['weight']}: {weight}",
-            f"{labels['completeness']}: {completeness}",
-        ]
-
-        if is_owner is not None:
-            msg_lines.insert(3, f"{labels['is_owner']}: {_yes_no(lang, bool(is_owner))}")
-
-        if missing_parts:
-            msg_lines.append(f"{labels['missing_parts']}: {missing_parts}")
-
-        msg_lines += [
-            f"{labels['transport']}: {transport}",
-            f"{labels['needs_tow']}: {_yes_no(lang, bool(needs_tow) if needs_tow is not None else None)}",
-            f"{labels['photos']}: {len(photos)}",
-            f"{labels['from']}: {user_line}",
-        ]
-        if tow_address:
-            msg_lines.append(f"{labels['location']}: {tow_address}")
-        elif lat is not None and lon is not None:
-            msg_lines.append(f"{labels['location']}: {lat}, {lon}")
-
-        # Prepare Call button only if phone looks like a full international number
-        call_button = None
-        if phone and re.fullmatch(r"\+?[0-9]{10,15}", phone):
-            call_button = InlineKeyboardButton("📞 Helista kohe", url=f"tel:{phone}")
-
-        if call_button:
-            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"admin_reply:{lead_id}"), call_button], [InlineKeyboardButton("🗑️ Arhiveeri", callback_data=f"admin_archive:{lead_id}")]])
-        else:
-            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"admin_reply:{lead_id}")], [InlineKeyboardButton("🗑️ Arhiveeri", callback_data=f"admin_archive:{lead_id}")]])
-
-        try:
-            await context.bot.send_message(
-                chat_id=ADMIN_TELEGRAM_USER_ID,
-                text="\n".join(msg_lines),
-                reply_markup=reply_markup,
-            )
-            logger.info("Admin notification sent for lead %s", lead_id)
-        except Exception:
-            logger.exception("FAILED to send admin lead message (lead_id=%s, admin_id=%s)", lead_id, ADMIN_TELEGRAM_USER_ID)
-    else:
-        logger.warning("ADMIN_TELEGRAM_USER_ID is not set or <=0 (value=%s); skipping admin notification for lead %s", ADMIN_TELEGRAM_USER_ID, lead_id)
-
-        media = []
-        photo_bytes = []
-        for path in photos[:4]:
-            try:
-                p = Path(path)
-                if not p.is_absolute():
-                    p = _BASE_DIR / p
-                if not p.exists():
-                    continue
-                b = p.read_bytes()
-                photo_bytes.append(b)
-                media.append(InputMediaPhoto(media=b))
-            except Exception:
-                logger.exception("Failed to read photo for admin send (lead_id=%s)", lead_id)
-
-        if media:
-            try:
-                await context.bot.send_media_group(chat_id=ADMIN_TELEGRAM_USER_ID, media=media)
-            except Exception:
-                logger.exception("Failed to send admin media group (lead_id=%s). Falling back to individual photos.", lead_id)
-                for b in photo_bytes:
-                    try:
-                        await context.bot.send_photo(chat_id=ADMIN_TELEGRAM_USER_ID, photo=b)
-                    except Exception:
-                        logger.exception("Failed to send admin photo fallback (lead_id=%s)", lead_id)
+    # Send admin notification immediately (text-only since no photos)
+    await _send_admin_notification(context, lead_id, full_phone)
 
     if context.user_data.get("language") == "ee":
-        msg = _thank_you_message("ee")
+        msg = "Aitäh! Võtame teiega ühendust pakkumisega."
     elif context.user_data.get("language") == "ru":
-        msg = _thank_you_message("ru")
+        msg = "Спасибо! Мы свяжемся с вами с предложением."
     else:
-        msg = _thank_you_message("en")
+        msg = "Thank you! We'll contact you with an offer."
 
-    await update.message.reply_text(msg, reply_markup=_share_keyboard(context.user_data.get("language", "en")))
-
+    await update.message.reply_text(msg, reply_markup=_new_inquiry_keyboard(context.user_data.get("language", "en")))
     context.user_data.clear()
-
     return ConversationHandler.END
+
+async def _send_admin_notification(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone_number: str) -> None:
+    """Send admin notification as Media Group with Lead Card caption and control message"""
+    from database.models import get_lead_photos, get_lead_by_id
+    
+    if not ADMIN_TELEGRAM_USER_ID or ADMIN_TELEGRAM_USER_ID <= 0:
+        logger.warning("ADMIN_TELEGRAM_USER_ID not set or invalid")
+        return
+    
+    lead = get_lead_by_id(lead_id)
+    if not lead:
+        logger.error("Lead %d not found for admin notification", lead_id)
+        return
+    
+    lang = lead.get("language", "en")
+    photos = get_lead_photos(lead_id)
+    logger.info(f"Sending lead {lead_id} with {len(photos)} photos to admin.")
+    
+    # Debug: Log photo file_ids
+    if photos:
+        logger.info("Photo file_ids: %s", [p["file_id"] for p in photos])
+    else:
+        logger.warning("No photos found for lead %d", lead_id)
+    
+    # Build Lead Card caption with HTML formatting
+    if lang == "ee":
+        title = f"<b>Uus päring #{lead_id}</b>"
+        labels = {"plate": "Number", "name": "Nimi", "phone": "Telefon", "weight": "Tühimass"}
+    elif lang == "ru":
+        title = f"<b>Новая заявка #{lead_id}</b>"
+        labels = {"plate": "Номер", "name": "Имя", "phone": "Телефон", "weight": "Масса"}
+    else:
+        title = f"<b>New inquiry #{lead_id}</b>"
+        labels = {"plate": "Plate", "name": "Name", "phone": "Phone", "weight": "Weight"}
+    
+    # Make phone clickable
+    phone_link = f'<a href="tel:{phone_number}">{phone_number}</a>'
+    
+    caption_lines = [
+        title,
+        f"<b>{labels['plate']}:</b> <code>{lead.get('plate_number')}</code>",
+        f"<b>{labels['name']}:</b> {lead.get('owner_name')}",
+        f"<b>{labels['phone']}:</b> {phone_link}",
+        f"<b>{labels['weight']}:</b> {lead.get('curb_weight')}kg",
+    ]
+    
+    # Add completeness if available
+    completeness = lead.get('completeness')
+    if completeness:
+        caption_lines.append(f"<b>Komplektsus:</b> {completeness}")
+    
+    # ALWAYS use send_media_group if photos exist
+    if photos:
+        media = []
+        # First photo gets the caption
+        media.append(InputMediaPhoto(
+            media=photos[0]["file_id"], 
+            caption="\n".join(caption_lines), 
+            parse_mode="HTML"
+        ))
+        # Add remaining photos without caption
+        for photo in photos[1:10]:  # Limit to 10 photos max
+            media.append(InputMediaPhoto(media=photo["file_id"]))
+        
+        try:
+            await context.bot.send_media_group(
+                chat_id=ADMIN_TELEGRAM_USER_ID,
+                media=media
+            )
+            logger.info(f"✅ Sent media group with {len(photos)} photos for lead {lead_id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send media group for lead {lead_id}: {e}")
+            # Fallback to text message if media group fails
+            await context.bot.send_message(
+                chat_id=ADMIN_TELEGRAM_USER_ID,
+                text="\n".join(caption_lines),
+                parse_mode="HTML"
+            )
+    else:
+        # No photos, send text-only
+        logger.info(f"No photos for lead {lead_id}, sending text-only message")
+        await context.bot.send_message(
+            chat_id=ADMIN_TELEGRAM_USER_ID,
+            text="\n".join(caption_lines),
+            parse_mode="HTML"
+        )
+    
+    # Send control message with buttons (always separate)
+    reply_markup = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💸 Send Price", callback_data=f"admin_reply:{lead_id}"),
+            InlineKeyboardButton("📂 Archive", callback_data=f"admin_archive:{lead_id}"),
+            InlineKeyboardButton("👤 View Profile", callback_data=f"admin_profile:{lead_id}")
+        ]
+    ])
+    
+    await context.bot.send_message(
+        chat_id=ADMIN_TELEGRAM_USER_ID,
+        text=f"Actions for lead #{lead_id}",
+        reply_markup=reply_markup
+    )
+    logger.info(f"✅ Admin notification completed for lead {lead_id}")
+
+async def phone_country_code(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    choice = update.message.text.strip()
+    logger.info("phone_country_code received: %s", choice)
+    # Extract country code from button text
+    match = re.search(r"\+([0-9]+)", choice)
+    if not match:
+        if context.user_data.get("language") == "ee":
+            msg = "Palun vali riigi kood nuppudest."
+        elif context.user_data.get("language") == "ru":
+            msg = "Пожалуйста, выберите код страны из кнопок."
+        else:
+            msg = "Please choose a country code from the buttons."
+        keyboard, _ = _phone_keyboard(context.user_data.get("language", "en"))
+        await update.message.reply_text(msg, reply_markup=keyboard)
+        return PHONE
+
+    country_code = "+" + match.group(1)
+    context.user_data["phone_country_code"] = country_code
+    logger.info("phone_country_code set to: %s", country_code)
+
+    if context.user_data.get("language") == "ee":
+        msg = f"Riikikood {country_code} valitud. Nüüd sisestage kohalik number (näiteks 51234567):"
+    elif context.user_data.get("language") == "ru":
+        msg = f"Код страны {country_code} выбран. Теперь введите местный номер (например 51234567):"
+    else:
+        msg = f"Country code {country_code} selected. Now enter your local number (example 51234567):"
+
+    await update.message.reply_text(msg)
+    return PHONE

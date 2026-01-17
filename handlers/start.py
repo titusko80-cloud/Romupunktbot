@@ -47,17 +47,29 @@ def load_translations():
 translations = load_translations()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Send welcome message and language selection"""
+    """Start the conversation and ask for language selection with a clear welcome message."""
+    user = update.effective_user
     context.user_data.clear()
-    keyboard = [
-        [KeyboardButton("🇪🇪 Eesti"), KeyboardButton("🇬🇧 English"), KeyboardButton("🇷🇺 Русский")]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
-    
-    await update.message.reply_text(
-        "Vali keel:",
-        reply_markup=reply_markup
+    context.user_data["user_id"] = user.id
+    context.user_data["telegram_username"] = getattr(user, "username", None)
+
+    welcome_text = (
+        "Tere! Olen Romupunkt bott, mis aitab teil müüa oma vana sõidukit.\n\n"
+        "Valige keel, et alustada:\n"
+        "🇪🇪 Eesti\n"
+        "🇷🇺 Русский\n"
+        "🇬🇧 English"
     )
+    reply_markup = ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("🇪🇪 Eesti")],
+            [KeyboardButton("🇷🇺 Русский")],
+            [KeyboardButton("🇬🇧 English")],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     return LANGUAGE
 
 async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

@@ -5,11 +5,15 @@ Logistics handlers - Transport selection and tow details
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 from states import LOGISTICS, LOCATION, PHOTOS
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def logistics_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle transport selection"""
     choice = update.message.text.strip()
     context.user_data['transport_method'] = choice
+    logger.info("logistics_selection: choice=%s, user_id=%s", choice, update.effective_user.id)
 
     choice_l = choice.lower()
     lang = context.user_data.get('language')
@@ -36,6 +40,7 @@ async def logistics_selection(update: Update, context: ContextTypes.DEFAULT_TYPE
         return LOGISTICS
 
     needs_tow = choice == tow_button
+    logger.info("logistics_selection: needs_tow=%s", needs_tow)
 
     if needs_tow:
         context.user_data['needs_tow'] = True
@@ -47,6 +52,7 @@ async def logistics_selection(update: Update, context: ContextTypes.DEFAULT_TYPE
             msg = "Need tow selected.\n\nPlease type your address (city, street, house number) so we can calculate transport costs."
 
         await update.message.reply_text(msg)
+        logger.info("logistics_selection: moving to LOCATION state")
         return LOCATION
     else:
         context.user_data['needs_tow'] = False
@@ -58,11 +64,13 @@ async def logistics_selection(update: Update, context: ContextTypes.DEFAULT_TYPE
             msg = "Bring myself selected.\n\nNow please send 3-4 clear photos of the vehicle from different angles:\n• Front\n• Back\n• Side\n• Interior (if possible)"
         
         await update.message.reply_text(msg)
+        logger.info("logistics_selection: moving to PHOTOS state")
         return PHOTOS
 
 
 async def location_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store tow address (text) then move to photo collection."""
+    logger.info("location_received: user_id=%s", update.effective_user.id)
     if update.message.location is not None:
         context.user_data['location'] = {
             'latitude': update.message.location.latitude,
@@ -80,4 +88,5 @@ async def location_received(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         msg = "Thank you!\n\nNow please send 3-4 clear photos of the vehicle from different angles:\n• Front\n• Back\n• Side\n• Interior (if possible)"
 
     await update.message.reply_text(msg)
+    logger.info("location_received: moving to PHOTOS state")
     return PHOTOS
