@@ -247,8 +247,9 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
         title = f"<b>🏎️ Inquiry #{lead_id}</b>"
         labels = {"plate": "Plate", "name": "Name", "phone": "Phone", "weight": "Weight", "owner": "Owner"}
     
-    # Make phone clickable for one-tap calling
-    phone_link = f'<a href="tel:{phone_number}">{phone_number}</a>'
+    # Make phone clickable for one-tap calling (FIXED: add + for country code)
+    clean_phone = phone_number.lstrip("+")
+    phone_link = f'<a href="tel:+{clean_phone}">{phone_number}</a>'
     
     # Build inquiry form caption
     caption_lines = [
@@ -338,11 +339,15 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
             parse_mode="HTML"
         )
     
-    # 🔴 REQUIRED: Send buttons as a second message
+    # 🔴 REQUIRED: Send buttons as a second message (FIXED tel: URL)
     logger.info(f"📸 CRITICAL: Sending action buttons as separate message for lead {lead_id}")
+    clean_phone = phone_number.lstrip("+")
     reply_markup = InlineKeyboardMarkup([
         [
+            InlineKeyboardButton("📞 Call", url=f"tel:+{clean_phone}"),
             InlineKeyboardButton("💸 Make Offer", callback_data=f"admin_reply:{lead_id}"),
+        ],
+        [
             InlineKeyboardButton("📂 Archive", callback_data=f"admin_archive:{lead_id}"),
         ]
     ])
