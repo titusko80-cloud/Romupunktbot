@@ -237,6 +237,9 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
         logger.error("Lead %d not found for admin notification", lead_id)
         return
     
+    # 🔴 PATCH 1: Define lang (BLOCKER #1 FIXED)
+    lang = lead.get("language") or "en"
+    
     # 🔴 REQUIRED: Load photos for this lead
     photos = get_lead_photos(lead_id)
     logger.info(f"📸 DEBUG: Retrieved {len(photos)} photos for lead {lead_id}")
@@ -259,8 +262,8 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
         title = f"<b>🏎️ Inquiry #{lead_id}</b>"
         labels = {"plate": "Plate", "name": "Name", "phone": "Phone", "weight": "Weight", "owner": "Owner"}
     
-    # B3 RULE: Display phone as plain text only (NO tel: URLs)
-    readable_phone = f"+372 {phone_number[4:7]} {phone_number[7:]}" if len(phone_number) > 7 else phone_number
+    # 🔴 PATCH 2: Fix phone rendering (BLOCKER #2 FIXED)
+    readable_phone = phone_number
     
     # Build inquiry form caption with plain text phone (B3 rule)
     caption_lines = [
@@ -305,7 +308,8 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
     if photos:
         media = []
         for i, photo_dict in enumerate(photos):
-            file_id = photo_dict["file_id"]
+            # 🔴 PATCH 3: Safe photo access (BLOCKER #3 FIXED)
+            file_id = photo_dict["file_id"] if isinstance(photo_dict, dict) else photo_dict[0]
             logger.info(f"📸 CRITICAL: Processing photo {i+1}/{len(photos)}: {file_id}")
             
             if i == 0:
