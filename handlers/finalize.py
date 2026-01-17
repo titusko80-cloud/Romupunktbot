@@ -140,21 +140,33 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         await update.message.reply_text(prompt, reply_markup=keyboard)
         return PHONE
 
-    # After country selected: expect local number
+    # B2 RULE: Phone number normalization (server-side, once)
     phone_raw = update.message.text.strip()
     country_code = context.user_data.get("phone_country_code", "")
-    full_phone = f"{country_code}{phone_raw.replace(' ', '')}"
-    logger.info("phone_number received: %s, full_phone: %s", phone_raw, full_phone)
-    if not re.fullmatch(r"\+[0-9]{10,15}", full_phone):
-        logger.warning("Phone validation failed for %s", full_phone)
+    
+    # Strip spaces and symbols
+    clean_phone = re.sub(r'[\s\-\(\)]', '', phone_raw)
+    
+    # Normalization logic
+    if clean_phone.startswith("+"):
+        full_phone = clean_phone  # Keep existing + format
+    elif clean_phone.startswith("372"):
+        full_phone = f"+{clean_phone}"  # Add + to 372
+    elif len(clean_phone) >= 7 and len(clean_phone) <= 8 and clean_phone.isdigit():
+        full_phone = f"+372{clean_phone}"  # Add +372 to short numbers
+    else:
+        # Reject invalid format
+        logger.warning("Phone validation failed for %s", clean_phone)
         if context.user_data.get("language") == "ee":
-            msg = "Palun sisestage korrektne number (näiteks 51234567):"
+            msg = "Palun sisestage korrektne number (näiteks 53504299 või +37253504299):"
         elif context.user_data.get("language") == "ru":
-            msg = "Введите корректный номер (например 51234567):"
+            msg = "Введите корректный номер (например 53504299 или +37253504299):"
         else:
-            msg = "Please enter a valid number (example 51234567):"
+            msg = "Please enter a valid number (example 53504299 or +37253504299):"
         await update.message.reply_text(msg, reply_markup=_new_inquiry_keyboard(context.user_data.get("language")))
         return PHONE
+    
+    logger.info("phone_number received: %s, full_phone: %s", phone_raw, full_phone)
 
     # Save phone number to context
     context.user_data["phone_number"] = full_phone
@@ -247,17 +259,16 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
         title = f"<b>🏎️ Inquiry #{lead_id}</b>"
         labels = {"plate": "Plate", "name": "Name", "phone": "Phone", "weight": "Weight", "owner": "Owner"}
     
-    # Make phone clickable for one-tap calling (FIXED: add + for country code)
-    clean_phone = phone_number.lstrip("+")
-    phone_link = f'<a href="tel:+{clean_phone}">{phone_number}</a>'
+    # B3 RULE: Display phone as plain text only (NO tel: URLs)
+    readable_phone = f"+372 {phone_number[4:7]} {phone_number[7:]}" if len(phone_number) > 7 else phone_number
     
-    # Build inquiry form caption
+    # Build inquiry form caption with plain text phone (B3 rule)
     caption_lines = [
         title,
         "",
         f"<b>📋 {labels['plate']}:</b> <code>{lead.get('plate_number')}</code>",
         f"<b>👤 {labels['name']}:</b> {lead.get('owner_name')}",
-        f"<b>📞 {labels['phone']}:</b> {phone_link}",
+        f"<b>📞 {labels['phone']}:</b> {readable_phone}",
         f"<b>⚖️ {labels['weight']}:</b> {lead.get('curb_weight')}kg",
     ]
     
@@ -339,22 +350,18 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
             parse_mode="HTML"
         )
     
-    # 🔴 REQUIRED: Send buttons as a second message (FIXED tel: URL)
+    # B4 RULE: Admin actions with plain text phone and correct buttons
     logger.info(f"📸 CRITICAL: Sending action buttons as separate message for lead {lead_id}")
-    clean_phone = phone_number.lstrip("+")
     reply_markup = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📞 Call", url=f"tel:+{clean_phone}"),
-            InlineKeyboardButton("💸 Make Offer", callback_data=f"admin_reply:{lead_id}"),
-        ],
-        [
-            InlineKeyboardButton("📂 Archive", callback_data=f"admin_archive:{lead_id}"),
+            InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"reply:{lead_id}"),
+            InlineKeyboardButton("🗑 Arhiveeri", callback_data=f"archive:{lead_id}"),
         ]
     ])
     
     await context.bot.send_message(
         chat_id=ADMIN_TELEGRAM_USER_ID,
-        text=f"🎯 Actions for lead #{lead_id}:",
+        text=f"📞 Telefon: {readable_phone}",
         reply_markup=reply_markup
     )
     logger.info(f"✅ SUCCESS: Action buttons sent for lead {lead_id}")

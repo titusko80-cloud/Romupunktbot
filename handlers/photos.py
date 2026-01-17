@@ -170,8 +170,9 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
         return PHOTOS
     
-    # Minimal response only for first few photos
-    if count <= 1:
+    # A1 RULE: NO individual responses per photo - storage only
+    # Only respond for first photo to guide user
+    if count == 1:
         if lang == 'ee':
             msg = f"Foto {count} saadetud. Palun saatke veel {max(0, 3 - count)} fotot."
         elif lang == 'ru':
