@@ -227,7 +227,14 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
     
     lang = lead.get("language", "en")
     photos = get_lead_photos(lead_id)
-    logger.info(f"📸 Sending Lead Card {lead_id} with {len(photos)} photos to admin.")
+    logger.info(f"📸 DEBUG: Retrieved {len(photos)} photos for lead {lead_id}")
+    
+    # Debug: Log photo file_ids
+    if photos:
+        for i, photo in enumerate(photos):
+            logger.info(f"📸 DEBUG: Photo {i+1}: {photo['file_id']}")
+    else:
+        logger.warning(f"📸 DEBUG: No photos found for lead {lead_id}")
     
     # Build inquiry form with HTML formatting
     if lang == "ee":
@@ -284,27 +291,42 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
     
     # CRITICAL: Send media group with photos if they exist
     if photos:
-        logger.info(f"📸 Sending media group with {len(photos)} photos for lead {lead_id}")
+        logger.info(f"📸 CRITICAL: Building media group with {len(photos)} photos")
         media = []
-        # First photo gets the inquiry form caption
-        media.append(InputMediaPhoto(
-            media=photos[0]["file_id"], 
-            caption=caption, 
-            parse_mode="HTML"
-        ))
-        # Add remaining photos for thumbnail gallery (max 10 total)
-        for photo in photos[1:10]:
-            media.append(InputMediaPhoto(media=photo["file_id"]))
         
+        # Step B: Build media group exactly as specified
+        for i, photo_dict in enumerate(photos):
+            file_id = photo_dict["file_id"]
+            logger.info(f"📸 CRITICAL: Processing photo {i+1}/{len(photos)}: {file_id}")
+            
+            if i == 0:
+                # First photo gets caption
+                logger.info(f"📸 CRITICAL: Adding photo {i+1} with caption")
+                media.append(
+                    InputMediaPhoto(
+                        media=file_id,
+                        caption=caption,
+                        parse_mode="HTML"
+                    )
+                )
+            else:
+                # Remaining photos without caption
+                logger.info(f"📸 CRITICAL: Adding photo {i+1} without caption")
+                media.append(InputMediaPhoto(media=file_id))
+        
+        logger.info(f"📸 CRITICAL: Media group built with {len(media)} items")
+        
+        # Step C: Send the album to admin
         try:
+            logger.info(f"📸 CRITICAL: Sending media group to admin {ADMIN_TELEGRAM_USER_ID}")
             await context.bot.send_media_group(
                 chat_id=ADMIN_TELEGRAM_USER_ID,
                 media=media
             )
-            logger.info(f"✅ Media group sent with {len(photos)} photos for lead {lead_id}")
+            logger.info(f"✅ SUCCESS: Media group sent with {len(photos)} photos for lead {lead_id}")
         except Exception as e:
-            logger.error(f"❌ Failed to send media group for lead {lead_id}: {e}")
-            # Fallback to text message if media group fails
+            logger.error(f"❌ FAILED: Media group failed for lead {lead_id}: {e}")
+            logger.info(f"📸 FALLBACK: Sending text message instead")
             await context.bot.send_message(
                 chat_id=ADMIN_TELEGRAM_USER_ID,
                 text=caption,
@@ -312,14 +334,15 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
             )
     else:
         # No photos, send text-only inquiry form
-        logger.info(f"📝 No photos for lead {lead_id}, sending text-only inquiry form")
+        logger.info(f"📸 NO PHOTOS: Sending text-only inquiry form for lead {lead_id}")
         await context.bot.send_message(
             chat_id=ADMIN_TELEGRAM_USER_ID,
             text=caption,
             parse_mode="HTML"
         )
     
-    # Send action buttons immediately under the photos
+    # Step D: Send buttons as a second message (mandatory separation)
+    logger.info(f"📸 CRITICAL: Sending action buttons as separate message for lead {lead_id}")
     reply_markup = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("💸 Make Offer", callback_data=f"admin_reply:{lead_id}"),
@@ -332,7 +355,7 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
         text=f"🎯 Actions for lead #{lead_id}:",
         reply_markup=reply_markup
     )
-    logger.info(f"✅ Lead Card completed for lead {lead_id}")
+    logger.info(f"✅ SUCCESS: Action buttons sent for lead {lead_id}")
 
 async def phone_country_code(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     choice = update.message.text.strip()
