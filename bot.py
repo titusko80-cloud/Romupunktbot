@@ -52,11 +52,11 @@ def main():
     async def _post_init(app: Application) -> None:
         """Set up bot descriptions and commands"""
         try:
-            # Set professional multilingual descriptions for empty chat window
+            # Set honest multilingual descriptions for empty chat window
             descriptions = {
-                'et': '🏁 ROMUPUNKT: Müü oma auto kiirelt! 🏎️ Saa pakkumine 60 sekundiga ja ametlik lammutustõend. Vajuta START, et alustada.',
-                'ru': '🏁 ROMUPUNKT: Продайте свою машину быстро! 🏎️ Получите предложение за 60 секунд и официальную справку об утилизации. Нажмите START, чтобы начать.',
-                'en': '🏁 ROMUPUNKT: Sell your car fast! 🏎️ Get a price quote in 60 seconds and an official destruction certificate. Press START to begin.'
+                'et': '�️ ROMUPUNKT: Autode ost ja lammutamine. Saada andmed ja pildid, me teeme pakkumise. Vormistame ametliku lammutustõendi ja eemaldame sõiduki registrist.',
+                'ru': '�️ ROMUPUNKT: Скупка и утилизация автомобилей. Пришлите данные и фото, и мы сделаем предложение. Оформляем официальную справку об утилизации.',
+                'en': '�️ ROMUPUNKT: Car buying and dismantling. Send details and photos, and we will make an offer. We provide an official destruction certificate and deregister the vehicle.'
             }
             
             # Set descriptions for all languages
@@ -67,37 +67,34 @@ def main():
                 except Exception as e:
                     logger.warning(f"❌ Failed to set description for {lang_code}: {e}")
             
-            # Set professional multilingual profile bio
+            # Set honest multilingual profile bio
             about_texts = {
                 'et': (
-                    '🏁 ROMUPUNKT\n\n'
-                    'Ametlik sõidukite lammutus teenus Eestis.\n'
-                    'Ostame vanu, vigastatud ja soovimatuid autosid.\n'
-                    '✅ Kiired pakkumised\n'
-                    '✅ Tasuta sõiduki äravedu\n'
+                    '�️ ROMUPUNKT\n\n'
+                    'Autode ost ja lammutamine Eestis.\n'
+                    'Ostme vanu, vigastatud ja soovimatuid autosid.\n'
+                    '✅ Pakkumised andmete põhjal\n'
                     '✅ Ametlik lammutustõend\n'
-                    '✅ Kohene makse\n\n'
-                    'Võta ühendust pakkumise saamiseks!'
+                    '✅ Sõiduki eemaldamine registrist\n\n'
+                    'Saada andmed ja pildid pakkumise saamiseks!'
                 ),
                 'ru': (
-                    '🏁 ROMUPUNKT\n\n'
-                    'Официальная услуга утилизации автомобилей в Эстонии.\n'
+                    '�️ ROMUPUNKT\n\n'
+                    'Скупка и утилизация автомобилей в Эстонии.\n'
                     'Покупаем старые, поврежденные и ненужные автомобили.\n'
-                    '✅ Быстрые предложения\n'
-                    '✅ Бесплатная эвакуация автомобиля\n'
+                    '✅ Предложения на основе данных\n'
                     '✅ Официальная справка об утилизации\n'
-                    '✅ Мгновенная оплата\n\n'
-                    'Свяжитесь с нами для получения предложения!'
+                    '✅ Снятие с учета\n\n'
+                    'Пришлите данные и фото для получения предложения!'
                 ),
                 'en': (
-                    '🏁 ROMUPUNKT\n\n'
-                    'Official vehicle dismantling service in Estonia.\n'
+                    '�️ ROMUPUNKT\n\n'
+                    'Car buying and dismantling in Estonia.\n'
                     'We buy old, damaged, and unwanted cars.\n'
-                    '✅ Fast price quotes\n'
-                    '✅ Free vehicle pickup\n'
+                    '✅ Offers based on data\n'
                     '✅ Official destruction certificate\n'
-                    '✅ Instant payment\n\n'
-                    'Contact us for a quote today!'
+                    '✅ Vehicle deregistration\n\n'
+                    'Send details and photos to get an offer!'
                 )
             }
             

@@ -213,7 +213,7 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return ConversationHandler.END
 
 async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone_number: str) -> None:
-    """Send professional Lead Card with media group and rich HTML caption"""
+    """Send professional Lead Card with media group and inquiry form caption"""
     if not ADMIN_TELEGRAM_USER_ID or ADMIN_TELEGRAM_USER_ID <= 0:
         logger.warning("ADMIN_TELEGRAM_USER_ID not set or invalid")
         return
@@ -227,21 +227,21 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
     photos = get_lead_photos(lead_id)
     logger.info(f"Sending lead {lead_id} with {len(photos)} photos to admin.")
     
-    # Build professional Lead Card caption with HTML formatting
+    # Build inquiry form caption with HTML formatting
     if lang == "ee":
-        title = f"<b>🏁 Uus päring #{lead_id}</b>"
-        labels = {"plate": "Number", "name": "Nimi", "phone": "Telefon", "weight": "Tühimass"}
+        title = f"<b>🏎️ Päring #{lead_id}</b>"
+        labels = {"plate": "Number", "name": "Nimi", "phone": "Telefon", "weight": "Mass", "completeness": "Komplektsus"}
     elif lang == "ru":
-        title = f"<b>🏁 Новая заявка #{lead_id}</b>"
-        labels = {"plate": "Номер", "name": "Имя", "phone": "Телефон", "weight": "Масса"}
+        title = f"<b>🏎️ Заявка #{lead_id}</b>"
+        labels = {"plate": "Номер", "name": "Имя", "phone": "Телефон", "weight": "Масса", "completeness": "Комплектность"}
     else:
-        title = f"<b>🏁 New inquiry #{lead_id}</b>"
-        labels = {"plate": "Plate", "name": "Name", "phone": "Phone", "weight": "Weight"}
+        title = f"<b>🏎️ Inquiry #{lead_id}</b>"
+        labels = {"plate": "Plate", "name": "Name", "phone": "Phone", "weight": "Weight", "completeness": "Completeness"}
     
     # Make phone clickable
     phone_link = f'<a href="tel:{phone_number}">{phone_number}</a>'
     
-    # Build rich HTML caption
+    # Build inquiry form caption
     caption_lines = [
         title,
         "",
@@ -258,7 +258,7 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
             comp_text = "✅ Täielik" if lang == "ee" else "✅ Полный" if lang == "ru" else "✅ Complete"
         else:
             comp_text = "❌ Puudub" if lang == "ee" else "❌ Не полный" if lang == "ru" else "❌ Missing parts"
-        caption_lines.append(f"<b>🔧 Komplektsus:</b> {comp_text}")
+        caption_lines.append(f"<b>🔧 {labels['completeness']}:</b> {comp_text}")
     
     # Add transport info
     transport = lead.get('transport_method')
@@ -266,14 +266,14 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
         caption_lines.append(f"<b>🚚 Transport:</b> {transport}")
     
     # Add photo count
-    caption_lines.append(f"<b>📷 Fotod:</b> {len(photos)}")
+    caption_lines.append(f"<b>📷 Photos:</b> {len(photos)}")
     
     caption = "\n".join(caption_lines)
     
     # Send media group if photos exist
     if photos:
         media = []
-        # First photo gets the caption
+        # First photo gets the inquiry form caption
         media.append(InputMediaPhoto(
             media=photos[0]["file_id"], 
             caption=caption, 
@@ -298,8 +298,8 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
                 parse_mode="HTML"
             )
     else:
-        # No photos, send text-only
-        logger.info(f"No photos for lead {lead_id}, sending text-only message")
+        # No photos, send text-only inquiry form
+        logger.info(f"No photos for lead {lead_id}, sending text-only inquiry form")
         await context.bot.send_message(
             chat_id=ADMIN_TELEGRAM_USER_ID,
             text=caption,
