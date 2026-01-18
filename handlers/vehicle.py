@@ -7,13 +7,8 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 from states import VEHICLE_PLATE, OWNER_NAME, OWNER_CONFIRM, CURB_WEIGHT, COMPLETENESS, MISSING_PARTS, LOGISTICS
 
-def validate_estonian_plate(plate: str) -> bool:
-    """Validate Estonian license plate format (123 ABC)"""
-    pattern = r'^[0-9]{3}\s*[A-Z]{3}$'
-    return bool(re.match(pattern, plate.upper().replace(' ', ' ')))
-
 async def plate_validation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Validate and store license plate number"""
+    """Store license plate number - accept user input as-is"""
     plate = (update.message.text or "").strip()
 
     if not plate:
@@ -27,16 +22,16 @@ async def plate_validation(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(msg)
         return VEHICLE_PLATE
     
-    # Store validated plate
-    context.user_data['plate_number'] = plate.upper()
+    # Store plate exactly as user entered it (no validation, no correction)
+    context.user_data['plate_number'] = plate
     
     # Ask for owner name
     if context.user_data.get('language') == 'ee':
-        msg = f"Autonumber {plate} on õige.\n\nMis on teie nimi?"
+        msg = f"Autonumber {plate} on salvestatud.\n\nMis on teie nimi?"
     elif context.user_data.get('language') == 'ru':
-        msg = f"Номер {plate} принят.\n\nКак вас зовут?"
+        msg = f"Номер {plate} сохранён.\n\nКак вас зовут?"
     else:
-        msg = f"License plate {plate} is valid.\n\nWhat is your name?"
+        msg = f"License plate {plate} saved.\n\nWhat is your name?"
     
     await update.message.reply_text(msg)
     return OWNER_NAME
