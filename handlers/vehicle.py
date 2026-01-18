@@ -4,7 +4,7 @@ Vehicle information handlers - Plate validation, owner name, curb weight, comple
 
 import re
 import logging
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 from states import VEHICLE_PLATE, OWNER_NAME, OWNER_CONFIRM, CURB_WEIGHT, LOGISTICS, PHOTOS
 from handlers.photos import _done_keyboard
@@ -121,10 +121,7 @@ async def curb_weight(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     
     context.user_data['curb_weight'] = weight
     logger.info(f"curb_weight: weight={weight}, going to photos")
-    
-    # CODE REPLACEMENT 1 - Remove ReplyKeyboard before showing logistics
-    await update.message.reply_text(" ", reply_markup=ReplyKeyboardRemove())
-    
-    # Show logistics inline keyboard
-    from handlers.logistics import show_logistics_inline
-    return await show_logistics_inline(update, context)
+
+    # Show logistics selection (ReplyKeyboard)
+    from handlers.logistics import show_logistics
+    return await show_logistics(update, context)

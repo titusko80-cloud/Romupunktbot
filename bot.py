@@ -8,14 +8,14 @@ legal requirements for car dismantling in Estonia.
 import asyncio
 import logging
 from telegram import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat, Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
 from telegram.ext import PicklePersistence
 from config import BOT_TOKEN, ADMIN_TELEGRAM_USER_ID
 from handlers.start import start, language_selection, welcome_continue
 from handlers.admin import leads_command, admin_lead_action_callback, offer_response_callback, admin_price_message, admin_archive_callback, admin_delete_callback
 from handlers.vehicle import plate_validation, owner_name, owner_confirm, curb_weight
 from handlers.photos import photo_collection, photo_text, _done_keyboard
-from handlers.logistics import logistics_selection_final, location_received
+from handlers.logistics import logistics_selection, location_received
 from handlers.finalize import phone_number, handle_share_button
 from database.models import init_db
 from states import (
@@ -105,9 +105,7 @@ def main():
             OWNER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_name)],
             OWNER_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_confirm)],
             CURB_WEIGHT: [MessageHandler(filters.TEXT & ~filters.COMMAND, curb_weight)],
-            LOGISTICS: [
-                CallbackQueryHandler(logistics_selection_final, pattern="^LOGISTICS_"),
-            ],
+            LOGISTICS: [MessageHandler(filters.TEXT & ~filters.COMMAND, logistics_selection)],
             PHOTOS: [
                 MessageHandler(filters.PHOTO | filters.Document.IMAGE, photo_collection),
                 MessageHandler(filters.Regex(r"^✅"), photo_text),

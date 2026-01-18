@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 import logging
+from database.models import save_session_photo
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,13 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     assert context.user_data.get("photo_count") is not None, "NO PHOTO COUNT"
     
     # TASK 3 - PHOTO COLLECTION MUST BE DUMB AND PURE
-    file_id = update.message.photo[-1].file_id
+    file_id = None
+    if update.message.photo:
+        file_id = update.message.photo[-1].file_id
+    elif update.message.document:
+        file_id = update.message.document.file_id
+    else:
+        return PHOTOS
     save_session_photo(update.effective_user.id, context.user_data["session_id"], file_id)
     
     context.user_data["photo_count"] += 1

@@ -389,29 +389,23 @@ def save_lead(user_data, user_id, username=None):
     
     return lead_id
 
-def get_lead_photos(lead_id: int) -> list[dict]:
-    """
-    Returns list of dicts: [{ "file_id": "..."}]
-    Extracts photo file_ids from the photos column (comma-separated string)
-    """
+def get_lead_photos_legacy_from_leads_column(lead_id: int) -> list[dict]:
+    """Legacy helper: reads comma-separated file_ids from leads.photos."""
     conn = sqlite3.connect('romupunkt.db')
     cursor = conn.cursor()
-    
+
     cursor.execute(
         "SELECT photos FROM leads WHERE id = ?",
         (lead_id,)
     )
-    
+
     row = cursor.fetchone()
     conn.close()
-    
+
     if not row or not row[0]:
         return []
-    
-    # photos are stored as comma-separated file_ids
+
     photo_file_ids = row[0].split(',') if row[0] else []
-    
-    # Filter out empty strings and return as list of dicts
     return [{"file_id": file_id.strip()} for file_id in photo_file_ids if file_id.strip()]
 
 
