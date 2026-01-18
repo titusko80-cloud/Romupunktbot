@@ -139,13 +139,23 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # B2 RULE: Phone number normalization (server-side, once)
     phone_raw = update.message.text.strip()
     logger.info("phone_number received: %s", phone_raw)
+
+    lang = context.user_data.get("language", "en")
+
+    if phone_raw.startswith("✅"):
+        if lang == "ee":
+            await update.message.reply_text("📞 Palun sisesta oma telefoninumber (näiteks 51234567).")
+        elif lang == "ru":
+            await update.message.reply_text("📞 Пожалуйста, отправьте номер телефона (например 51234567).")
+        else:
+            await update.message.reply_text("📞 Please send your phone number (example 51234567).")
+        return PHONE
     
     # Remove all non-digit characters
     digits_only = re.sub(r'[^\d]', '', phone_raw)
     
     # Validate phone number (5-15 digits)
     if len(digits_only) < 5 or len(digits_only) > 15:
-        lang = context.user_data.get("language", "en")
         if lang == "ee":
             await update.message.reply_text("Palun sisestage kehtiv telefoninumber (5-15 numbrit).")
         elif lang == "ru":

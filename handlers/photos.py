@@ -31,8 +31,24 @@ async def photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # TASK 2 - DEFENSIVE BLOCKING
     # Silently ignore any text that matches logistics options
     text = update.message.text.strip()
-    
-    if text == "✅ Valmis":
+
+    lang = context.user_data.get("language")
+    done_texts = {"✅ Valmis", "✅ Готово", "✅ Done"}
+    if lang == "ee":
+        done_texts = {"✅ Valmis"}
+    elif lang == "ru":
+        done_texts = {"✅ Готово"}
+    elif lang == "en":
+        done_texts = {"✅ Done"}
+
+    if text in done_texts:
+        if lang == "ee":
+            msg = "📞 Palun sisesta oma telefoninumber, et saaksime sinuga kohe ühendust võtta."
+        elif lang == "ru":
+            msg = "📞 Пожалуйста, отправьте номер телефона, чтобы мы могли быстро связаться с вами."
+        else:
+            msg = "📞 Please send your phone number so we can contact you quickly."
+        await update.message.reply_text(msg, reply_markup=ReplyKeyboardRemove())
         return PHONE
     
     return PHOTOS
