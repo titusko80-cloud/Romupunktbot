@@ -7,7 +7,7 @@ legal requirements for car dismantling in Estonia.
 
 import asyncio
 import logging
-from telegram import BotCommand, Update
+from telegram import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackQueryHandler
 from telegram.ext import PicklePersistence
 from config import BOT_TOKEN, ADMIN_TELEGRAM_USER_ID
@@ -97,8 +97,12 @@ def main():
             
             for lang_code, about_text in about_texts.items():
                 try:
-                    await application.bot.set_my_about_text(about_text=about_text, language_code=lang_code)
-                    logger.info(f"✅ Bot about text set for language: {lang_code}")
+                    if hasattr(application.bot, "set_my_short_description"):
+                        await application.bot.set_my_short_description(short_description=about_text, language_code=lang_code)
+                        logger.info(f"✅ Bot short description set for language: {lang_code}")
+                    elif hasattr(application.bot, "set_my_about_text"):
+                        await application.bot.set_my_about_text(about_text=about_text, language_code=lang_code)
+                        logger.info(f"✅ Bot about text set for language: {lang_code}")
                 except Exception as e:
                     logger.warning(f"❌ Failed to set about text for {lang_code}: {e}")
                     
@@ -111,7 +115,7 @@ def main():
                 BotCommand('start', 'Start / Start'),
                 BotCommand('new', 'New inquiry / Uus päring / Новая заявка'),
             ]
-            application.bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
+            await application.bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
             logger.info("Bot commands set for all users")
         except Exception as e:
             logger.warning("Failed to set bot commands: %s", e)
@@ -119,14 +123,12 @@ def main():
         # Set commands for admin
         if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
             try:
-                from telegram import BotCommandScopeChat
-
                 commands = [
                     BotCommand("start", "Alusta"),
                     BotCommand("new", "Uus päring"),
                     BotCommand("leads", "Admin: päringud"),
                 ]
-                application.bot.set_my_commands(commands, scope=BotCommandScopeChat(ADMIN_TELEGRAM_USER_ID))
+                await application.bot.set_my_commands(commands, scope=BotCommandScopeChat(ADMIN_TELEGRAM_USER_ID))
             except Exception:
                 pass
 
@@ -166,6 +168,7 @@ def main():
             MessageHandler(filters.Regex(r'^🔄'), start),
         ],
         per_chat=True,     # ✅ DEFAULT, EXPLICIT
+        per_message=True,
     )
     
     application.add_handler(conv_handler)
