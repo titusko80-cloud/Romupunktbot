@@ -2,74 +2,76 @@
 Logistics handlers - Transport selection and tow details
 """
 
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+from telegram.ext import ContextTypes, CallbackQueryHandler
 from states import LOGISTICS, LOCATION, PHOTOS
 import logging
+from handlers.photos import _done_keyboard
 
 logger = logging.getLogger(__name__)
 
-async def logistics_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle transport selection"""
-    logger.info(f"logistics_selection called: user_id={update.effective_user.id}, choice='{update.message.text}'")
-    logger.info(f"logistics_selection: current conversation state: {getattr(context, 'conversation_state', 'unknown')}")
-    
-    choice = update.message.text.strip()
-    context.user_data['transport_method'] = choice
-    logger.info("logistics_selection: choice=%s, user_id=%s", choice, update.effective_user.id)
+async def logistics_selection_final(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
 
-    choice_l = choice.lower()
-    lang = context.user_data.get('language')
-    if lang == 'ee':
-        tow_button = "🚛 Vajan buksiiri"
-        self_button = "🚗 Toon ise"
-    elif lang == 'ru':
-        tow_button = "🚛 Нужен эвакуатор"
-        self_button = "🚗 Привезу сам"
-    else:
-        tow_button = "🚛 Need tow"
-        self_button = "🚗 Bring myself"
+    # TASK 1 - HARD UI RESET
+    context.user_data.clear()
+    from uuid import uuid4
+    context.user_data["session_id"] = uuid4().hex
+    context.user_data["photo_count"] = 0
 
-    if choice not in (tow_button, self_button):
-        keyboard = [[KeyboardButton(tow_button), KeyboardButton(self_button)]]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=False)
-        if lang == 'ee':
-            msg = "Palun valige üks nuppudest."
-        elif lang == 'ru':
-            msg = "Пожалуйста, выберите одну из кнопок."
-        else:
-            msg = "Please choose one of the buttons."
-        await update.message.reply_text(msg, reply_markup=reply_markup)
-        return LOGISTICS
+    # Remove inline keyboard and show ONLY [✅ Valmis] button
+    await query.edit_message_reply_markup(None)
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="📸 Laadi nüüd auto pildid üles.\nKui valmis, vajuta [✅ Valmis].",
+        reply_markup=ReplyKeyboardMarkup([['✅ Valmis']], resize_keyboard=True)
+    )
 
-    needs_tow = choice == tow_button
-    logger.info("logistics_selection: needs_tow=%s", needs_tow)
-
-    if needs_tow:
-        context.user_data['needs_tow'] = True
-        if context.user_data.get('language') == 'ee':
-            msg = "Vajan buksiiri valitud.\n\nPalun kirjutage oma aadress (linn, tänav, maja nr), et saaksime transportikulu arvutada."
-        elif context.user_data.get('language') == 'ru':
-            msg = "Выбран эвакуатор.\n\nПожалуйста, напишите адрес (город, улица, дом), чтобы мы могли посчитать стоимость перевозки."
-        else:
-            msg = "Need tow selected.\n\nPlease type your address (city, street, house number) so we can calculate transport costs."
-
-        await update.message.reply_text(msg)
-        logger.info("logistics_selection: moving to LOCATION state")
+    # TASK 7 - KILL LOCATION PATH IF NOT TOW
+    if query.data == "LOGISTICS_TOW":
+        context.user_data["needs_tow"] = True
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="📍 Palun kirjuta aadress, kust auto tuleb ära tuua."
+        )
         return LOCATION
+
+    # 🚗 TOON ISE → STRAIGHT TO PHOTOS
+    context.user_data["needs_tow"] = False
+    return PHOTOS
+
+
+async def show_logistics_inline(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Show logistics options as inline keyboard"""
+    lang = context.user_data.get('language')
+    
+    # TASK 1 - FIX THE STICKY BUTTONS (UI)
+    # Remove any existing ReplyKeyboard before showing inline keyboard
+    await update.message.reply_text(" ", reply_markup=ReplyKeyboardRemove())
+    
+    if lang == 'ee':
+        keyboard = [
+            [InlineKeyboardButton("🚗 Toon ise", callback_data="LOGISTICS_SELF")],
+            [InlineKeyboardButton("🚛 Vajan buksiiri", callback_data="LOGISTICS_TOW")]
+        ]
+        msg = "Kuidas soovite sõiduki transportida?"
+    elif lang == 'ru':
+        keyboard = [
+            [InlineKeyboardButton("🚗 Привезу сам", callback_data="LOGISTICS_SELF")],
+            [InlineKeyboardButton("🚛 Нужен эвакуатор", callback_data="LOGISTICS_TOW")]
+        ]
+        msg = "Как вы хотите доставить автомобиль?"
     else:
-        context.user_data['needs_tow'] = False
-        if context.user_data.get('language') == 'ee':
-            msg = "Toon ise valitud.\n\nViimane samm:\n\nPalun sisestage oma telefoninumber, et me saaksime teile kiiresti pakkumise teha:"
-        elif context.user_data.get('language') == 'ru':
-            msg = "Вы выбрали: привезу сам.\n\nПоследний шаг:\n\nВведите ваш номер телефона, чтобы мы быстро сделали предложение:"
-        else:
-            msg = "Bring myself selected.\n\nFinal step:\n\nPlease enter your phone number so we can quickly send you an offer:"
-        
-        # Remove keyboard and go to phone step
-        await update.message.reply_text(msg, reply_markup=ReplyKeyboardRemove())
-        logger.info("logistics_selection: moving to PHONE state")
-        return PHONE
+        keyboard = [
+            [InlineKeyboardButton("🚗 Bring myself", callback_data="LOGISTICS_SELF")],
+            [InlineKeyboardButton("🚛 Need tow", callback_data="LOGISTICS_TOW")]
+        ]
+        msg = "How would you like to transport the vehicle?"
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(msg, reply_markup=reply_markup)
+    return LOGISTICS
 
 
 async def location_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -84,13 +86,13 @@ async def location_received(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     else:
         context.user_data['tow_address'] = (update.message.text or '').strip()
 
-    if context.user_data.get('language') == 'ee':
-        msg = "Aitäh!\n\nNüüd palun saatke 3-4 selget fotot sõidukist eri nurkadest:\n• Eest\n• Tagant\n• Külg\n• Salong (kui võimalik)"
-    elif context.user_data.get('language') == 'ru':
-        msg = "Спасибо!\n\nТеперь отправьте 3-4 чётких фото автомобиля с разных ракурсов:\n• Спереди\n• Сзади\n• Сбоку\n• Салон (если возможно)"
-    else:
-        msg = "Thank you!\n\nNow please send 3-4 clear photos of the vehicle from different angles:\n• Front\n• Back\n• Side\n• Interior (if possible)"
+    # Create session for photos
+    from uuid import uuid4
+    context.user_data["session_id"] = uuid4().hex
+    context.user_data["photo_count"] = 0
 
-    await update.message.reply_text(msg)
-    logger.info("location_received: moving to PHOTOS state")
+    await update.message.reply_text(
+        "📸 Palun laadi üles auto pildid (võid saada mitu korraga)."
+    )
+
     return PHOTOS

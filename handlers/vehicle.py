@@ -4,9 +4,9 @@ Vehicle information handlers - Plate validation, owner name, curb weight, comple
 
 import re
 import logging
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.ext import ContextTypes
-from states import VEHICLE_PLATE, OWNER_NAME, OWNER_CONFIRM, CURB_WEIGHT, COMPLETENESS, MISSING_PARTS, LOGISTICS, PHOTOS
+from states import VEHICLE_PLATE, OWNER_NAME, OWNER_CONFIRM, CURB_WEIGHT, LOGISTICS, PHOTOS
 from handlers.photos import _done_keyboard
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ async def owner_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 async def curb_weight(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store curb weight and go directly to photos"""
-    logger.info(f"curb_weight called: user_id={update.effective_user.id}, current_state={context.user_data.get('current_state', 'unknown')}")
+    logger.info(f"curb_weight called: user_id={update.effective_user.id}")
     
     try:
         # Extract numbers from text (handles "1500", "1500 kg", "1500kg", etc.)
@@ -127,24 +127,9 @@ async def curb_weight(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     context.user_data['curb_weight'] = weight
     logger.info(f"curb_weight: weight={weight}, going to photos")
     
-    # Go directly to photos (reorganized flow)
-    if context.user_data.get('language') == 'ee':
-        msg = "Täname! Nüüd palun saatke 3-4 selget fotot sõidukist eri nurkadest:\n• Eest\n• Tagant\n• Külg\n• Salong (kui võimalik)"
-    elif context.user_data.get('language') == 'ru':
-        msg = "Спасибо! Теперь отправьте 3-4 чётких фото автомобиля с разных ракурсов:\n• Спереди\n• Сзади\n• Сбоку\n• Салон (если возможно)"
-    else:
-        msg = "Thank you! Now please send 3-4 clear photos of the vehicle from different angles:\n• Front\n• Back\n• Side\n• Interior (if possible)"
+    # CODE REPLACEMENT 1 - Remove ReplyKeyboard before showing logistics
+    await update.message.reply_text(" ", reply_markup=ReplyKeyboardRemove())
     
-    await update.message.reply_text(msg, reply_markup=_done_keyboard(context.user_data.get('language', 'en')))
-    return PHOTOS
-
-async def vehicle_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """This handler is no longer used - completeness was removed from flow"""
-    # This should never be called since COMPLETENESS state was removed
-    return LOGISTICS
-
-
-async def missing_parts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """This handler is no longer used - completeness was removed from flow"""
-    # This should never be called since MISSING_PARTS state was removed
-    return LOGISTICS
+    # Show logistics inline keyboard
+    from handlers.logistics import show_logistics_inline
+    return await show_logistics_inline(update, context)

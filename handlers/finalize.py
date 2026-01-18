@@ -10,7 +10,7 @@ from telegram import ReplyKeyboardMarkup, KeyboardButton
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 from config import ADMIN_TELEGRAM_USER_ID
-from database.models import save_lead, get_lead_photos, get_lead_by_id
+from database.models import save_lead, get_lead_photos, get_lead_by_id, move_session_photos_to_lead
 from states import PHONE
 
 
@@ -135,8 +135,10 @@ def _phone_keyboard(lang: str) -> ReplyKeyboardMarkup:
 
 async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Accept direct phone number input without country code picker"""
+    
     # B2 RULE: Phone number normalization (server-side, once)
     phone_raw = update.message.text.strip()
+    logger.info("phone_number received: %s", phone_raw)
     
     # Remove all non-digit characters
     digits_only = re.sub(r'[^\d]', '', phone_raw)
@@ -163,29 +165,35 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         user_id = update.effective_user.id
         photos = get_session_photos(user_id, session_id)
         
-        if photos:
-            # Create lead with all data
-            logger.info("Creating lead with %d session photos", len(photos))
-            user = update.effective_user
-            lead_id = save_lead(context.user_data, user.id, getattr(user, "username", None))
-            
-            # CRITICAL: Move photos from session to permanent storage BEFORE notification
-            move_session_photos_to_lead(user_id, session_id, lead_id)
-            
-            # CRITICAL: Send live Lead Card to admin IMMEDIATELY after database commit
-            logger.info("Triggering live admin notification for lead %d", lead_id)
-            await send_lead_card(context, lead_id, phone_raw)
-            
-            if context.user_data.get("language") == "ee":
-                msg = "Aitäh! Võtame teiega ühendust pakkumisega."
-            elif context.user_data.get("language") == "ru":
-                msg = "Спасибо! Мы свяжемся с вами с предложением."
-            else:
-                msg = "Thank you! We'll contact you with an offer."
-            
-            await update.message.reply_text(msg, reply_markup=_new_inquiry_keyboard(lang))
-            context.user_data.clear()
-            return ConversationHandler.END
+        # Create lead with all data
+        logger.info("Creating lead with %d session photos", len(photos))
+        user = update.effective_user
+        lead_id = save_lead(context.user_data, user.id, getattr(user, "username", None))
+        
+        # Move photos from session to permanent storage BEFORE notification
+        move_session_photos_to_lead(user_id, session_id, lead_id)
+        
+        # 🔴 STEP 4 - HARD FAIL IF PHOTOS ARE ZERO
+        photos = get_lead_photos(lead_id)
+        if not photos:
+            raise RuntimeError("FATAL: Lead finalized without photos")
+        
+        logger.info("ATTACHED %d PHOTOS to lead %d", len(photos), lead_id)
+        
+        # CRITICAL: Send live Lead Card to admin IMMEDIATELY after database commit
+        logger.info("Triggering live admin notification for lead %d", lead_id)
+        await send_lead_card(context, lead_id, phone_raw)
+        
+        if context.user_data.get("language") == "ee":
+            msg = "Aitäh! Võtame teiega ühendust pakkumisega."
+        elif context.user_data.get("language") == "ru":
+            msg = "Спасибо! Мы свяжемся с вами с предложением."
+        else:
+            msg = "Thank you! We'll contact you with an offer."
+        
+        await update.message.reply_text(msg, reply_markup=_new_inquiry_keyboard(lang))
+        context.user_data.clear()
+        return ConversationHandler.END
 
     # No photos, create lead now
     user = update.effective_user
