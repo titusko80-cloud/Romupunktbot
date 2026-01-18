@@ -74,14 +74,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         with open("logo.jpg", "rb") as photo_file:
             await update.message.reply_photo(
                 photo=photo_file,
-                caption="🏎️ **ROMUPUNKT**\n\n*Autode ost ja lammutamine Eestis*",
+                caption="💰 **ROMUPUNKT**\n\n*Ostame autosid igas seisukorras*",
                 parse_mode="Markdown"
             )
     except FileNotFoundError:
-        await update.message.reply_text("🏎️ **ROMUPUNKT**\n\n*Autode ost ja lammutamine Eestis*", parse_mode="Markdown")
+        await update.message.reply_text("💰 **ROMUPUNKT**\n\n*Ostame autosid igas seisukorras*", parse_mode="Markdown")
     except Exception as e:
         logger.error(f"Failed to send logo: {e}")
-        await update.message.reply_text("🏎️ **ROMUPUNKT**\n\n*Autode ost ja lammutamine Eestis*", parse_mode="Markdown")
+        await update.message.reply_text("💰 **ROMUPUNKT**\n\n*Ostame autosid igas seisukorras*", parse_mode="Markdown")
 
     # Show language selection
     keyboard = [
@@ -169,7 +169,11 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
     selected_msg_tpl = t.get('language_selected', "Language selected: {lang}")
     selected_msg = selected_msg_tpl.format(lang=lang_name)
 
-    await update.message.reply_text(f"{selected_msg}\n\n{welcome_msg}\n\n{legal_note}")
+    msg = f"{selected_msg}\n\n{welcome_msg}"
+    if legal_note:
+        msg = f"{msg}\n\n{legal_note}"
+
+    await update.message.reply_text(msg)
  
     keyboard = [[KeyboardButton(start_text)]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
