@@ -8,7 +8,7 @@ legal requirements for car dismantling in Estonia.
 import asyncio
 import logging
 from telegram import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat, Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackQueryHandler
 from telegram.ext import PicklePersistence
 from config import BOT_TOKEN, ADMIN_TELEGRAM_USER_ID
 from handlers.start import start, language_selection, welcome_continue
@@ -127,6 +127,19 @@ def main():
     )
     
     application.add_handler(conv_handler)
+
+    if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
+        application.add_handler(CommandHandler("leads", leads_command))
+        application.add_handler(
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND & filters.User(user_id=ADMIN_TELEGRAM_USER_ID),
+                admin_price_message,
+            )
+        )
+        application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r"^admin_reply:"))
+        application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r"^admin_archive:"))
+        application.add_handler(CallbackQueryHandler(admin_delete_callback, pattern=r"^admin_delete:"))
+        application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r"^offer_(accept|reject):"))
     
     # Start the Bot
     application.run_polling()

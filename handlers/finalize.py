@@ -367,8 +367,8 @@ async def send_lead_card(context: ContextTypes.DEFAULT_TYPE, lead_id: int, phone
     logger.info(f"📸 CRITICAL: Sending action buttons as separate message for lead {lead_id}")
     reply_markup = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"reply:{lead_id}"),
-            InlineKeyboardButton("🗑 Arhiveeri", callback_data=f"archive:{lead_id}"),
+            InlineKeyboardButton("💬 Vasta pakkumisega", callback_data=f"admin_reply:{lead_id}"),
+            InlineKeyboardButton("🗑 Arhiveeri", callback_data=f"admin_archive:{lead_id}"),
         ]
     ])
     

@@ -187,13 +187,16 @@ async def leads_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 def _parse_price(text: str) -> float | None:
     """Extract the first number from a string (e.g. '200 eurot' -> 200)."""
-    # Strip everything but digits and decimal points
-    cleaned = re.sub(r'[^0-9.]', '', text.replace(' ', ''))
-    if not cleaned:
+    if not text:
         return None
-    
+
+    m = re.search(r"(\d+(?:[\.,]\d{1,2})?)", text.replace(" ", ""))
+    if not m:
+        return None
+
+    token = m.group(1).replace(",", ".")
     try:
-        return float(cleaned)
+        return float(token)
     except ValueError:
         return None
 
