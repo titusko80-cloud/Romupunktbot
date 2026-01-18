@@ -11,13 +11,8 @@ from handlers.photos import _done_keyboard
 
 logger = logging.getLogger(__name__)
 
-def validate_estonian_plate(plate: str) -> bool:
-    """Validate Estonian license plate format (123 ABC)"""
-    pattern = r'^[0-9]{3}\s*[A-Z]{3}$'
-    return bool(re.match(pattern, plate.upper().replace(' ', ' ')))
-
 async def plate_validation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Validate and store license plate number"""
+    """Store license plate number - accept user input as-is"""
     plate = (update.message.text or "").strip()
 
     if not plate:
@@ -31,8 +26,8 @@ async def plate_validation(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(msg)
         return VEHICLE_PLATE
     
-    # Store validated plate
-    context.user_data['plate_number'] = plate.upper()
+    # Store plate exactly as user entered it (no validation, no correction)
+    context.user_data['plate_number'] = plate
     
     # Ask for owner name
     if context.user_data.get('language') == 'ee':

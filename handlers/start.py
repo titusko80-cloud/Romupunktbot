@@ -111,7 +111,9 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     else:
         keyboard = [
-            [KeyboardButton("🇪🇪 Eesti"), KeyboardButton("🇬🇧 English"), KeyboardButton("🇷🇺 Русский")]
+            [KeyboardButton("🇪🇪 Eesti")],
+            [KeyboardButton("🇷🇺 Русский")],
+            [KeyboardButton("🇬🇧 English")]
         ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
         await update.message.reply_text(
