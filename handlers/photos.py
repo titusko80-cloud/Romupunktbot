@@ -73,8 +73,15 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     
     # Show Done button only after first photo
     if context.user_data["photo_count"] == 1:
+        lang = context.user_data.get("language")
+        if lang == "ru":
+            msg = "Когда закончите, нажмите:"
+        elif lang == "en":
+            msg = "When finished, tap:"
+        else:
+            msg = "Kui valmis, vajuta:"
         await update.message.reply_text(
-            "Kui valmis, vajuta:",
+            msg,
             reply_markup=_done_keyboard(context.user_data.get("language"))
         )
     
