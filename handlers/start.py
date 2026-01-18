@@ -7,8 +7,11 @@ from telegram.constants import BotCommandScopeType
 from telegram import BotCommandScopeChat
 from telegram.ext import ContextTypes
 from states import LANGUAGE, VEHICLE_PLATE, WELCOME
+import logging
 import json
 from config import ADMIN_TELEGRAM_USER_ID
+
+logger = logging.getLogger(__name__)
 
 def load_translations():
     """Load translation files"""
