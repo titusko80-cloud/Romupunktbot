@@ -134,44 +134,28 @@ def _phone_keyboard(lang: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True), prompt
 
 async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # First time: show country picker
-    if "phone_country_code" not in context.user_data:
-        keyboard, prompt = _phone_keyboard(context.user_data.get("language", "en"))
-        await update.message.reply_text(prompt, reply_markup=keyboard)
-        return PHONE
-
+    """Accept direct phone number input without country code picker"""
     # B2 RULE: Phone number normalization (server-side, once)
     phone_raw = update.message.text.strip()
-    country_code = context.user_data.get("phone_country_code", "")
     
-    # Strip spaces and symbols
-    clean_phone = re.sub(r'[\s\-\(\)]', '', phone_raw)
+    # Remove all non-digit characters
+    digits_only = re.sub(r'[^\d]', '', phone_raw)
     
-    # Normalization logic
-    if clean_phone.startswith("+"):
-        full_phone = clean_phone  # Keep existing + format
-    elif clean_phone.startswith("372"):
-        full_phone = f"+{clean_phone}"  # Add + to 372
-    elif len(clean_phone) >= 7 and len(clean_phone) <= 8 and clean_phone.isdigit():
-        full_phone = f"+372{clean_phone}"  # Add +372 to short numbers
-    else:
-        # Reject invalid format
-        logger.warning("Phone validation failed for %s", clean_phone)
-        if context.user_data.get("language") == "ee":
-            msg = "Palun sisestage korrektne number (näiteks 53504299 või +37253504299):"
-        elif context.user_data.get("language") == "ru":
-            msg = "Введите корректный номер (например 53504299 или +37253504299):"
+    # Validate phone number (5-15 digits)
+    if len(digits_only) < 5 or len(digits_only) > 15:
+        lang = context.user_data.get("language", "en")
+        if lang == "ee":
+            await update.message.reply_text("Palun sisestage kehtiv telefoninumber (5-15 numbrit).")
+        elif lang == "ru":
+            await update.message.reply_text("Пожалуйста, введите действительный номер телефона (5-15 цифр).")
         else:
-            msg = "Please enter a valid number (example 53504299 or +37253504299):"
-        await update.message.reply_text(msg, reply_markup=_new_inquiry_keyboard(context.user_data.get("language")))
+            await update.message.reply_text("Please enter a valid phone number (5-15 digits).")
         return PHONE
     
-    logger.info("phone_number received: %s, full_phone: %s", phone_raw, full_phone)
-
-    # Save phone number to context
-    context.user_data["phone_number"] = full_phone
-    logger.info("phone_number set to: %s", full_phone)
-
+    # Store the raw phone number as provided by user
+    context.user_data["phone_number"] = phone_raw
+    logger.info("phone_number set to: %s", phone_raw)
+    
     # Check if we have session photos
     session_id = context.user_data.get('session_id')
     if session_id:
@@ -190,13 +174,11 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             
             # CRITICAL: Send live Lead Card to admin IMMEDIATELY after database commit
             logger.info("Triggering live admin notification for lead %d", lead_id)
-            await send_lead_card(context, lead_id, full_phone)
+            await send_lead_card(context, lead_id, phone_raw)
             
-            # Send thank you message
-            lang = context.user_data.get("language")
-            if lang == "ee":
+            if context.user_data.get("language") == "ee":
                 msg = "Aitäh! Võtame teiega ühendust pakkumisega."
-            elif lang == "ru":
+            elif context.user_data.get("language") == "ru":
                 msg = "Спасибо! Мы свяжемся с вами с предложением."
             else:
                 msg = "Thank you! We'll contact you with an offer."
@@ -214,11 +196,7 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     # CRITICAL: Send live Lead Card to admin IMMEDIATELY after database commit
     logger.info("Triggering live admin notification for lead %d (no photos)", lead_id)
     
-    # 🔥 DEBUG: Find the real file
-    import inspect
-    logger.error("🔥 PHONE_NUMBER FILE: %s", inspect.getfile(inspect.currentframe()))
-    
-    await send_lead_card(context, lead_id, full_phone)
+    await send_lead_card(context, lead_id, phone_raw)
 
     if context.user_data.get("language") == "ee":
         msg = "Aitäh! Võtame teiega ühendust pakkumisega."

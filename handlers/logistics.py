@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 async def logistics_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle transport selection"""
+    logger.info(f"logistics_selection called: user_id={update.effective_user.id}, choice='{update.message.text}'")
+    logger.info(f"logistics_selection: current conversation state: {getattr(context, 'conversation_state', 'unknown')}")
+    
     choice = update.message.text.strip()
     context.user_data['transport_method'] = choice
     logger.info("logistics_selection: choice=%s, user_id=%s", choice, update.effective_user.id)
@@ -29,7 +32,7 @@ async def logistics_selection(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if choice not in (tow_button, self_button):
         keyboard = [[KeyboardButton(tow_button), KeyboardButton(self_button)]]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=False)
         if lang == 'ee':
             msg = "Palun valige üks nuppudest."
         elif lang == 'ru':
@@ -57,15 +60,16 @@ async def logistics_selection(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         context.user_data['needs_tow'] = False
         if context.user_data.get('language') == 'ee':
-            msg = "Toon ise valitud.\n\nNüüd palun saatke 3-4 selget fotot sõidukist eri nurkadest:\n• Eest\n• Tagant\n• Külg\n• Salong (kui võimalik)"
+            msg = "Toon ise valitud.\n\nViimane samm:\n\nPalun sisestage oma telefoninumber, et me saaksime teile kiiresti pakkumise teha:"
         elif context.user_data.get('language') == 'ru':
-            msg = "Вы выбрали: привезу сам.\n\nТеперь отправьте 3-4 чётких фото автомобиля с разных ракурсов:\n• Спереди\n• Сзади\n• Сбоку\n• Салон (если возможно)"
+            msg = "Вы выбрали: привезу сам.\n\nПоследний шаг:\n\nВведите ваш номер телефона, чтобы мы быстро сделали предложение:"
         else:
-            msg = "Bring myself selected.\n\nNow please send 3-4 clear photos of the vehicle from different angles:\n• Front\n• Back\n• Side\n• Interior (if possible)"
+            msg = "Bring myself selected.\n\nFinal step:\n\nPlease enter your phone number so we can quickly send you an offer:"
         
-        await update.message.reply_text(msg)
-        logger.info("logistics_selection: moving to PHOTOS state")
-        return PHOTOS
+        # Remove keyboard and go to phone step
+        await update.message.reply_text(msg, reply_markup=ReplyKeyboardRemove())
+        logger.info("logistics_selection: moving to PHONE state")
+        return PHONE
 
 
 async def location_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

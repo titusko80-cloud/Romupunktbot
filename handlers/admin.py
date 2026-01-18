@@ -29,8 +29,14 @@ def _format_lead(lead: dict, compact: bool = False) -> str:
     tow_address = lead.get("tow_address")
     lat = lead.get("location_latitude")
     lon = lead.get("location_longitude")
-    photos = (lead.get("photos") or "").strip()
-    photos_count = len([p for p in photos.split(",") if p]) if photos else 0
+    
+    # Get photos from the photos table, not the leads table
+    try:
+        photos = get_lead_photos(lead_id)
+        photos_count = len(photos)
+    except Exception:
+        photos_count = 0
+    
     status = lead.get("status", "pending")
 
     # Status badge
@@ -315,20 +321,34 @@ async def admin_lead_action_callback(update: Update, context: ContextTypes.DEFAU
 async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle admin price input with robust parsing"""
     user = update.effective_user
+    logger.info(f"admin_price_message called: user_id={user.id if user else 'None'}, ADMIN_TELEGRAM_USER_ID={ADMIN_TELEGRAM_USER_ID}")
+    
     if user is None or ADMIN_TELEGRAM_USER_ID <= 0 or user.id != ADMIN_TELEGRAM_USER_ID:
+        logger.warning("admin_price_message: Not authorized")
         return
 
     lead_id = context.chat_data.get("awaiting_price_lead_id")
+    logger.info(f"admin_price_message: awaiting_price_lead_id={lead_id}")
+    logger.info(f"admin_price_message: chat_data keys={list(context.chat_data.keys())}")
+    
     if not lead_id:
+        logger.warning("admin_price_message: No awaiting_price_lead_id found")
+        await update.message.reply_text("Please first click '💬 Vasta' on a lead before sending a price.")
         return
 
     raw_text = update.message.text if update.message else ""
+    logger.info(f"admin_price_message: raw_text='{raw_text}'")
+    
     if not raw_text:
+        logger.warning("admin_price_message: No text found")
         return
 
     # Robust price parsing - strip non-digits
     amount = _parse_price(raw_text)
+    logger.info(f"admin_price_message: parsed amount={amount}")
+    
     if amount is None or amount <= 0:
+        logger.warning(f"admin_price_message: Invalid amount {amount}")
         await update.message.reply_text("Palun sisesta kehtiv hind (näiteks 800€ või 200).")
         raise ApplicationHandlerStop
 

@@ -20,10 +20,10 @@ from telegram.ext import PicklePersistence
 from config import BOT_TOKEN, ADMIN_TELEGRAM_USER_ID
 from handlers.start import start, language_selection, welcome_continue
 from handlers.admin import leads_command, admin_lead_action_callback, offer_response_callback, admin_price_message, admin_archive_callback, admin_delete_callback
-from handlers.vehicle import vehicle_info, plate_validation, owner_name, owner_confirm, curb_weight, missing_parts
-from handlers.photos import photo_collection, photo_text
+from handlers.vehicle import plate_validation, owner_name, owner_confirm, curb_weight
+from handlers.photos import photo_collection, photo_text, _done_keyboard
 from handlers.logistics import logistics_selection, location_received
-from handlers.finalize import phone_number, handle_share_button, phone_country_code
+from handlers.finalize import phone_number, handle_share_button
 from database.models import init_db
 from states import (
     LANGUAGE,
@@ -32,11 +32,9 @@ from states import (
     OWNER_NAME,
     OWNER_CONFIRM,
     CURB_WEIGHT,
-    COMPLETENESS,
-    MISSING_PARTS,
+    PHOTOS,
     LOGISTICS,
     LOCATION,
-    PHOTOS,
     PHONE,
 )
 
@@ -46,6 +44,91 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Media group handler - defined outside main function
+async def handle_media_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle ALL photos - both media groups and single photos"""
+    logger.info(f"Media group handler triggered! User: {update.effective_user.id}, Message type: {type(update.message)}")
+    
+    # Initialize photos array if needed
+    if 'photos' not in context.user_data:
+        context.user_data['photos'] = []
+        context.user_data['last_response_time'] = 0
+    
+    # Create session_id if not exists
+    if 'session_id' not in context.user_data:
+        import uuid
+        context.user_data['session_id'] = str(uuid.uuid4())
+        logger.info(f"Created session {context.user_data['session_id']} for user {update.effective_user.id}")
+    
+    # Process each photo in the message
+    photos_in_message = 0
+    
+    # Handle photo uploads
+    if update.message.photo:
+        # Each message = one photo (but with multiple sizes)
+        photos_in_message = 1
+        
+        # Get the smallest size for admin (thumbnail)
+        file_id = update.message.photo[0].file_id  # Smallest size
+        
+        # Store the photo in both context and session database
+        context.user_data['photos'].append(file_id)
+        if 'photo_count' not in context.user_data:
+            context.user_data['photo_count'] = 0
+        context.user_data['photo_count'] += 1
+        
+        # Also save to session database for Done button to work
+        from database.models import save_session_photo
+        save_session_photo(update.effective_user.id, context.user_data['session_id'], file_id)
+        
+        logger.info(f"Photo saved: {file_id} (message {photos_in_message} photo, total: {context.user_data['photo_count']})")
+    
+    # Handle document uploads (images sent as documents)
+    elif update.message.document and (update.message.document.mime_type or "").startswith("image/"):
+        file_id = update.message.document.file_id
+        
+        # Store the photo in both context and session database
+        context.user_data['photos'].append(file_id)
+        if 'photo_count' not in context.user_data:
+            context.user_data['photo_count'] = 0
+        context.user_data['photo_count'] += 1
+        photos_in_message += 1
+        
+        # Also save to session database for Done button to work
+        from database.models import save_session_photo
+        save_session_photo(update.effective_user.id, context.user_data['session_id'], file_id)
+        
+        logger.info(f"Document photo saved: {file_id}")
+    else:
+        logger.warning(f"Media group handler called but no photo/document found. Message: {update.message}")
+    
+    # Smart response logic - only show Done button after first photo
+    total_count = context.user_data['photo_count']
+    
+    # Only show Done button after first photo, no counting messages
+    if total_count == 1:
+        # First photo - show Done button only
+        lang = context.user_data.get('language')
+        if lang == 'ee':
+            msg = "✅ Valmis"
+        elif lang == 'ru':
+            msg = "✅ Готово"
+        else:
+            msg = "✅ Done"
+        await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
+    elif total_count >= 5:
+        # Maximum reached - show Done button with message
+        lang = context.user_data.get('language')
+        if lang == 'ee':
+            msg = "Maksimum 5 fotot. ✅ Valmis"
+        elif lang == 'ru':
+            msg = "Максимум 5 фото. ✅ Готово"
+        else:
+            msg = "Maximum 5 photos. ✅ Done"
+        await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
+    # For photos 2-4: NO MESSAGE - let user continue smoothly
+    return
 
 
 def main():
@@ -166,20 +249,17 @@ def main():
             OWNER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_name)],
             OWNER_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, owner_confirm)],
             CURB_WEIGHT: [MessageHandler(filters.TEXT & ~filters.COMMAND, curb_weight)],
-            COMPLETENESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, vehicle_info)],
-            MISSING_PARTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, missing_parts)],
-            LOGISTICS: [MessageHandler(filters.TEXT & ~filters.COMMAND, logistics_selection)],
-            LOCATION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, location_received),
-                MessageHandler(filters.LOCATION, location_received),
-            ],
             PHOTOS: [
                 MessageHandler(filters.PHOTO, photo_collection),
                 MessageHandler(filters.Document.IMAGE, photo_collection),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, photo_text),
             ],
+            LOGISTICS: [MessageHandler(filters.TEXT & ~filters.COMMAND, logistics_selection)],
+            LOCATION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, location_received),
+                MessageHandler(filters.LOCATION, location_received),
+            ],
             PHONE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, phone_country_code),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, phone_number),
             ],
         },

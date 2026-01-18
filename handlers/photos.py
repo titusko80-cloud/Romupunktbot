@@ -34,22 +34,12 @@ def _done_keyboard(lang: str) -> ReplyKeyboardMarkup:
     else:
         text = "✅ Done"
     keyboard = [[KeyboardButton(text)]]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=False)
 
 
 async def _ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Ask for phone number and send admin notification if lead exists"""
-    from handlers.finalize import send_lead_card
-    
+    """Ask for phone number - lead creation and photo movement happens in phone_number handler"""
     lang = context.user_data.get('language')
-    lead_id = context.user_data.get('lead_id')
-    
-    # If we have a lead (photos were sent), send admin notification now
-    if lead_id:
-        phone = context.user_data.get('phone_number')
-        if phone:
-            logger.info("Sending admin notification for existing lead %d after photos", lead_id)
-            await send_lead_card(context, lead_id, phone)
     
     if lang == 'ee':
         msg = "Täname! Viimane samm:\n\nPalun sisestage oma telefoninumber, et me saaksime teile kiiresti pakkumise teha:"
@@ -65,6 +55,7 @@ async def _ask_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle 'Done' button - enforce gate before proceeding"""
     from database.models import get_session_photos
+    from handlers.vehicle import curb_weight
     
     lang = context.user_data.get('language', 'en')
     text = update.message.text.strip()
@@ -72,11 +63,19 @@ async def photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Check for Done button in all languages
     done_texts = ['✅ Valmis', '✅ Готово', '✅ Done']
     
+    # Check for logistics buttons and completely ignore them without any response
+    logistics_texts = ['🚛 Vajan buksiiri', '🚗 Toon ise', '🚛 Нужен эвакуатор', '🚗 Привезу сам', '🚛 Need tow', '🚗 Bring myself']
+    
+    if text in logistics_texts:
+        # Completely ignore logistics buttons during photo upload - no response at all
+        logger.info(f"photo_text: Completely ignoring logistics button '{text}' during photo upload")
+        return PHOTOS
+    
     if text in done_texts:
         session_id = context.user_data.get('session_id')
         if not session_id:
-            # No session, proceed to phone step
-            return await _ask_phone(update, context)
+            # No session, proceed to logistics step
+            return await _ask_logistics(update, context)
         
         # Check if user has uploaded any photos
         user_id = update.effective_user.id
@@ -93,9 +92,9 @@ async def photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
             return PHOTOS
         
-        # Have photos, proceed to phone step
+        # Have photos, proceed to logistics step
         logger.info("User clicked Done with %d photos in session %s", len(photos), session_id)
-        return await _ask_phone(update, context)
+        return await _ask_logistics(update, context)
     
     # Any other text during photo phase
     if lang == 'ee':
@@ -108,8 +107,29 @@ async def photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
     return PHOTOS
 
+
+async def _ask_logistics(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Ask for logistics method after photos"""
+    lang = context.user_data.get('language')
+    
+    if lang == 'ee':
+        keyboard = [[KeyboardButton("🚛 Vajan buksiiri"), KeyboardButton("🚗 Toon ise")]]
+        msg = "Kuidas soovite sõiduki transportida?"
+    elif lang == 'ru':
+        keyboard = [[KeyboardButton("🚛 Нужен эвакуатор"), KeyboardButton("🚗 Привезу сам")]]
+        msg = "Как вы хотите доставить автомобиль?"
+    else:
+        keyboard = [[KeyboardButton("🚛 Need tow"), KeyboardButton("🚗 Bring myself")]]
+        msg = "How would you like to transport the vehicle?"
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=False)
+    await update.message.reply_text(msg, reply_markup=reply_markup)
+    return LOGISTICS
+
 async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle photo uploads with session-based storage and concurrency safety"""
+    logger.info(f"photo_collection called: user_id={update.effective_user.id}, has_photo={bool(update.message.photo)}, has_document={bool(update.message.document)}")
+    
     import uuid
     from database.models import save_session_photo
     
@@ -171,13 +191,8 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return PHOTOS
     
     # A1 RULE: NO individual responses per photo - storage only
-    # Only respond for first photo to guide user
+    # Only show Done button after first photo, and ensure no old keyboards
     if count == 1:
-        if lang == 'ee':
-            msg = f"Foto {count} saadetud. Palun saatke veel {max(0, 3 - count)} fotot."
-        elif lang == 'ru':
-            msg = f"Отправлено фото {count}. Пожалуйста, пришлите еще {max(0, 3 - count)} фото."
-        else:
-            msg = f"Photo {count} sent. Please send {max(0, 3 - count)} more photos."
-        await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
+        # Clear any existing keyboards first, then show Done button
+        await update.message.reply_text("✅ Valmis", reply_markup=_done_keyboard(lang))
     return PHOTOS

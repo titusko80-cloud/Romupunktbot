@@ -3,9 +3,13 @@ Vehicle information handlers - Plate validation, owner name, curb weight, comple
 """
 
 import re
+import logging
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
-from states import VEHICLE_PLATE, OWNER_NAME, OWNER_CONFIRM, CURB_WEIGHT, COMPLETENESS, MISSING_PARTS, LOGISTICS
+from states import VEHICLE_PLATE, OWNER_NAME, OWNER_CONFIRM, CURB_WEIGHT, COMPLETENESS, MISSING_PARTS, LOGISTICS, PHOTOS
+from handlers.photos import _done_keyboard
+
+logger = logging.getLogger(__name__)
 
 def validate_estonian_plate(plate: str) -> bool:
     """Validate Estonian license plate format (123 ABC)"""
@@ -32,11 +36,11 @@ async def plate_validation(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     
     # Ask for owner name
     if context.user_data.get('language') == 'ee':
-        msg = f"Autonumber {plate} on õige.\n\nMis on teie nimi?"
+        msg = f"Autonumber {plate} on salvestatud.\n\nMis on teie nimi?"
     elif context.user_data.get('language') == 'ru':
-        msg = f"Номер {plate} принят.\n\nКак вас зовут?"
+        msg = f"Номер {plate} сохранён.\n\nКак вас зовут?"
     else:
-        msg = f"License plate {plate} is valid.\n\nWhat is your name?"
+        msg = f"License plate {plate} saved.\n\nWhat is your name?"
     
     await update.message.reply_text(msg)
     return OWNER_NAME
@@ -60,7 +64,7 @@ async def owner_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         no_btn = "❌ No"
         msg = f"Thank you, {owner_name}!\n\nAre you the owner of this vehicle?"
 
-    reply_markup = ReplyKeyboardMarkup([[KeyboardButton(yes_btn), KeyboardButton(no_btn)]], resize_keyboard=True, is_persistent=True)
+    reply_markup = ReplyKeyboardMarkup([[KeyboardButton(yes_btn), KeyboardButton(no_btn)]], resize_keyboard=True, is_persistent=False)
     await update.message.reply_text(msg, reply_markup=reply_markup)
     return OWNER_CONFIRM
 
@@ -86,7 +90,7 @@ async def owner_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         weight_msg = "What is your vehicle's curb weight (kg)? This is needed for accurate pricing."
 
     if choice not in (yes_btn, no_btn):
-        reply_markup = ReplyKeyboardMarkup([[KeyboardButton(yes_btn), KeyboardButton(no_btn)]], resize_keyboard=True, is_persistent=True)
+        reply_markup = ReplyKeyboardMarkup([[KeyboardButton(yes_btn), KeyboardButton(no_btn)]], resize_keyboard=True, is_persistent=False)
         await update.message.reply_text(invalid_msg, reply_markup=reply_markup)
         return OWNER_CONFIRM
 
@@ -95,9 +99,18 @@ async def owner_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return CURB_WEIGHT
 
 async def curb_weight(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Store curb weight and ask about completeness"""
+    """Store curb weight and go directly to photos"""
+    logger.info(f"curb_weight called: user_id={update.effective_user.id}, current_state={context.user_data.get('current_state', 'unknown')}")
+    
     try:
-        weight = int(update.message.text.strip())
+        # Extract numbers from text (handles "1500", "1500 kg", "1500kg", etc.)
+        import re
+        text = update.message.text.strip()
+        numbers = re.findall(r'\d+', text)
+        if not numbers:
+            raise ValueError("No numbers found")
+        
+        weight = int(numbers[0])
         if weight < 500 or weight > 5000:
             raise ValueError("Weight out of reasonable range")
     except ValueError:
@@ -112,93 +125,26 @@ async def curb_weight(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return CURB_WEIGHT
     
     context.user_data['curb_weight'] = weight
+    logger.info(f"curb_weight: weight={weight}, going to photos")
     
-    # Ask about completeness
+    # Go directly to photos (reorganized flow)
     if context.user_data.get('language') == 'ee':
-        keyboard = [[KeyboardButton("Jah"), KeyboardButton("Ei")]]
-        msg = "Kas sõiduk on täiskomplektis?"
+        msg = "Täname! Nüüd palun saatke 3-4 selget fotot sõidukist eri nurkadest:\n• Eest\n• Tagant\n• Külg\n• Salong (kui võimalik)"
     elif context.user_data.get('language') == 'ru':
-        keyboard = [[KeyboardButton("✅ Полный"), KeyboardButton("❌ Не полный")]]
-        msg = "Автомобиль в полной комплектации?"
+        msg = "Спасибо! Теперь отправьте 3-4 чётких фото автомобиля с разных ракурсов:\n• Спереди\n• Сзади\n• Сбоку\n• Салон (если возможно)"
     else:
-        keyboard = [[KeyboardButton("✅ Complete"), KeyboardButton("❌ Missing parts")]]
-        msg = "Is the vehicle complete?"
-
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
-
-    await update.message.reply_text(msg, reply_markup=reply_markup)
-    return COMPLETENESS
+        msg = "Thank you! Now please send 3-4 clear photos of the vehicle from different angles:\n• Front\n• Back\n• Side\n• Interior (if possible)"
+    
+    await update.message.reply_text(msg, reply_markup=_done_keyboard(context.user_data.get('language', 'en')))
+    return PHOTOS
 
 async def vehicle_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Store completeness info and ask about logistics"""
-    completeness = update.message.text.strip()
-
-    lang = context.user_data.get('language')
-    if lang == 'ee':
-        valid_complete = "Jah"
-        valid_missing = "Ei"
-    elif lang == 'ru':
-        valid_complete = "✅ Полный"
-        valid_missing = "❌ Не полный"
-    else:
-        valid_complete = "✅ Complete"
-        valid_missing = "❌ Missing parts"
-
-    if completeness not in (valid_complete, valid_missing):
-        keyboard = [[KeyboardButton(valid_complete), KeyboardButton(valid_missing)]]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
-        if lang == 'ee':
-            msg = "Palun valige üks nuppudest."
-        elif lang == 'ru':
-            msg = "Пожалуйста, выберите одну из кнопок."
-        else:
-            msg = "Please choose one of the buttons."
-        await update.message.reply_text(msg, reply_markup=reply_markup)
-        return COMPLETENESS
-
-    is_missing = completeness == valid_missing
-    context.user_data['completeness'] = 'missing' if is_missing else 'complete'
-
-    if is_missing:
-        if lang == 'ee':
-            msg = "Mis on puudu? (näiteks aku, rattad, katalüsaator jne)"
-        elif lang == 'ru':
-            msg = "Что отсутствует? (например аккумулятор, колёса, катализатор и т.д.)"
-        else:
-            msg = "What is missing? (e.g. battery, wheels, catalytic converter, etc.)"
-        await update.message.reply_text(msg)
-        return MISSING_PARTS
-
-    if lang == 'ee':
-        keyboard = [[KeyboardButton("🚛 Vajan buksiiri"), KeyboardButton("🚗 Toon ise")]]
-        msg = "Kuidas soovite sõiduki transportida?"
-    elif lang == 'ru':
-        keyboard = [[KeyboardButton("🚛 Нужен эвакуатор"), KeyboardButton("🚗 Привезу сам")]]
-        msg = "Как вы хотите доставить автомобиль?"
-    else:
-        keyboard = [[KeyboardButton("🚛 Need tow"), KeyboardButton("🚗 Bring myself")]]
-        msg = "How would you like to transport the vehicle?"
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
-
-    await update.message.reply_text(msg, reply_markup=reply_markup)
+    """This handler is no longer used - completeness was removed from flow"""
+    # This should never be called since COMPLETENESS state was removed
     return LOGISTICS
 
 
 async def missing_parts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = (update.message.text or '').strip()
-    context.user_data['missing_parts'] = text
-
-    lang = context.user_data.get('language')
-    if lang == 'ee':
-        keyboard = [[KeyboardButton("🚛 Vajan buksiiri"), KeyboardButton("🚗 Toon ise")]]
-        msg = "Kuidas soovite sõiduki transportida?"
-    elif lang == 'ru':
-        keyboard = [[KeyboardButton("🚛 Нужен эвакуатор"), KeyboardButton("🚗 Привезу сам")]]
-        msg = "Как вы хотите доставить автомобиль?"
-    else:
-        keyboard = [[KeyboardButton("🚛 Need tow"), KeyboardButton("🚗 Bring myself")]]
-        msg = "How would you like to transport the vehicle?"
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
-
-    await update.message.reply_text(msg, reply_markup=reply_markup)
+    """This handler is no longer used - completeness was removed from flow"""
+    # This should never be called since MISSING_PARTS state was removed
     return LOGISTICS
