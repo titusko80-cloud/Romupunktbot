@@ -125,7 +125,6 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user_id = update.effective_user.id
     lang = context.user_data.get('language')
 
-<<<<<<< HEAD
     file_id = None
     if update.message.photo:
         photo = update.message.photo[-1]
@@ -134,16 +133,6 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     elif update.message.document and (update.message.document.mime_type or "").startswith("image/"):
         file_id = update.message.document.file_id
         logger.info("SAVED DOCUMENT FILE_ID: %s", file_id)
-=======
-    file = None
-    if update.message.photo:
-        # Get highest resolution photo (last in array)
-        file = await update.message.photo[-1].get_file()
-        logger.info("Got photo file_id: %s", file.file_id)
-    elif update.message.document and (update.message.document.mime_type or "").startswith("image/"):
-        file = await update.message.document.get_file()
-        logger.info("Got document file_id: %s", file.file_id)
->>>>>>> 1099954472c2c60950d7cfd6d061e3aa581ef4b9
     else:
         if lang == 'ee':
             msg = "Palun saatke foto (pilt) või vajutage 'Valmis'."
@@ -154,27 +143,9 @@ async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
         return PHOTOS
     
-<<<<<<< HEAD
     # Store file_id directly (no download, no URLs)
     context.user_data['photos'].append(file_id)
     context.user_data['photo_count'] += 1
-=======
-    # Save to session-based storage with concurrency safety
-    try:
-        save_session_photo(user_id, session_id, file.file_id)
-        context.user_data['photo_count'] += 1
-        logger.info("Saved photo to session %s, total photos: %d", session_id, context.user_data['photo_count'])
-    except Exception as e:
-        logger.error("Failed to save photo: %s", e)
-        if lang == 'ee':
-            msg = "Viga foto salvestamisel. Palun proovige uuesti."
-        elif lang == 'ru':
-            msg = "Ошибка сохранения фото. Пожалуйста, попробуйте еще раз."
-        else:
-            msg = "Error saving photo. Please try again."
-        await update.message.reply_text(msg, reply_markup=_done_keyboard(lang))
-        return PHOTOS
->>>>>>> 1099954472c2c60950d7cfd6d061e3aa581ef4b9
 
     count = context.user_data['photo_count']
     
