@@ -63,48 +63,6 @@ def main():
                     logger.info(f"✅ Bot description set for language: {lang_code}")
                 except Exception as e:
                     logger.warning(f"❌ Failed to set description for {lang_code}: {e}")
-            
-            # Set honest multilingual profile bio
-            about_texts = {
-                'et': (
-                    '�️ ROMUPUNKT\n\n'
-                    'Autode ost ja lammutamine Eestis.\n'
-                    'Ostme vanu, vigastatud ja soovimatuid autosid.\n'
-                    '✅ Pakkumised andmete põhjal\n'
-                    '✅ Ametlik lammutustõend\n'
-                    '✅ Sõiduki eemaldamine registrist\n\n'
-                    'Saada andmed ja pildid pakkumise saamiseks!'
-                ),
-                'ru': (
-                    '�️ ROMUPUNKT\n\n'
-                    'Скупка и утилизация автомобилей в Эстонии.\n'
-                    'Покупаем старые, поврежденные и ненужные автомобили.\n'
-                    '✅ Предложения на основе данных\n'
-                    '✅ Официальная справка об утилизации\n'
-                    '✅ Снятие с учета\n\n'
-                    'Пришлите данные и фото для получения предложения!'
-                ),
-                'en': (
-                    '�️ ROMUPUNKT\n\n'
-                    'Car buying and dismantling in Estonia.\n'
-                    'We buy old, damaged, and unwanted cars.\n'
-                    '✅ Offers based on data\n'
-                    '✅ Official destruction certificate\n'
-                    '✅ Vehicle deregistration\n\n'
-                    'Send details and photos to get an offer!'
-                )
-            }
-            
-            for lang_code, about_text in about_texts.items():
-                try:
-                    if hasattr(application.bot, "set_my_short_description"):
-                        await application.bot.set_my_short_description(short_description=about_text, language_code=lang_code)
-                        logger.info(f"✅ Bot short description set for language: {lang_code}")
-                    elif hasattr(application.bot, "set_my_about_text"):
-                        await application.bot.set_my_about_text(about_text=about_text, language_code=lang_code)
-                        logger.info(f"✅ Bot about text set for language: {lang_code}")
-                except Exception as e:
-                    logger.warning(f"❌ Failed to set about text for {lang_code}: {e}")
                     
         except Exception as e:
             logger.warning("Failed to set bot descriptions: %s", e)
@@ -168,7 +126,6 @@ def main():
             MessageHandler(filters.Regex(r'^🔄'), start),
         ],
         per_chat=True,     # ✅ DEFAULT, EXPLICIT
-        per_message=True,
     )
     
     application.add_handler(conv_handler)
