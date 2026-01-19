@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for romupunktbot-wuy4bg on 2026-01-18T22:38:46Z
+# fly.toml app configuration file generated for romupunktbot on 2026-01-19T00:08:04Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'romupunktbot-wuy4bg'
+app = 'romupunktbot'
 primary_region = 'ams'
 
 [build]
