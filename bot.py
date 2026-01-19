@@ -147,7 +147,7 @@ def main():
     application.add_handler(conv_handler, group=1)
     
     # Start the Bot
-    application.run_polling()
+    application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
