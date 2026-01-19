@@ -92,6 +92,19 @@ def main():
 
     application = Application.builder().token(BOT_TOKEN).post_init(_post_init).persistence(persistence).build()
 
+    if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
+        application.add_handler(CommandHandler("leads", leads_command))
+        application.add_handler(
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND & filters.User(user_id=ADMIN_TELEGRAM_USER_ID),
+                admin_price_message,
+            )
+        )
+        application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r"^admin_reply:"))
+        application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r"^admin_archive:"))
+        application.add_handler(CallbackQueryHandler(admin_delete_callback, pattern=r"^admin_delete:"))
+        application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r"^offer_(accept|reject):"))
+
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler('start', start),
@@ -126,20 +139,7 @@ def main():
         per_chat=True,     # ✅ DEFAULT, EXPLICIT
     )
     
-    application.add_handler(conv_handler)
-
-    if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
-        application.add_handler(CommandHandler("leads", leads_command))
-        application.add_handler(
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND & filters.User(user_id=ADMIN_TELEGRAM_USER_ID),
-                admin_price_message,
-            )
-        )
-        application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r"^admin_reply:"))
-        application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r"^admin_archive:"))
-        application.add_handler(CallbackQueryHandler(admin_delete_callback, pattern=r"^admin_delete:"))
-        application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r"^offer_(accept|reject):"))
+    application.add_handler(conv_handler, group=1)
     
     # Start the Bot
     application.run_polling()

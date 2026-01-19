@@ -190,7 +190,9 @@ def _parse_price(text: str) -> float | None:
     if not text:
         return None
 
-    m = re.search(r"(\d+(?:[\.,]\d{1,2})?)", text.replace(" ", ""))
+    # Normalize all whitespace (spaces, newlines, NBSP) to avoid parsing failures.
+    compact = re.sub(r"\s+", "", text)
+    m = re.search(r"(\d+(?:[\.,]\d{1,2})?)", compact)
     if not m:
         return None
 
