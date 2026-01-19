@@ -301,6 +301,11 @@ async def offer_counter_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # If admin is currently replying with a price offer, do not let counter-offer logic
+    # intercept the admin's numeric message (common when admin is also the testing user).
+    if context.chat_data.get("awaiting_price_lead_id"):
+        return
+
     offer_id = context.user_data.get("awaiting_counter_offer_offer_id")
     lead_id = context.user_data.get("awaiting_counter_offer_lead_id")
     if not offer_id or not lead_id:
@@ -461,6 +466,12 @@ async def admin_lead_action_callback(update: Update, context: ContextTypes.DEFAU
     except Exception:
         await q.answer("Error", show_alert=True)
         return
+
+    # Ensure stale counter-offer state doesn't hijack the admin's next numeric reply.
+    context.user_data.pop("awaiting_counter_offer_offer_id", None)
+    context.user_data.pop("awaiting_counter_offer_lead_id", None)
+    context.chat_data.pop("awaiting_counter_offer_offer_id", None)
+    context.chat_data.pop("awaiting_counter_offer_lead_id", None)
 
     context.chat_data["awaiting_price_lead_id"] = str(lead_id)
     await q.answer()
