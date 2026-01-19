@@ -276,8 +276,12 @@ async def offer_counter_callback(update: Update, context: ContextTypes.DEFAULT_T
         offer_id,
         lead.get("id"),
     )
-    context.user_data["awaiting_counter_offer_offer_id"] = int(offer_id)
-    context.user_data["awaiting_counter_offer_lead_id"] = int(lead.get("id"))
+    awaiting_offer_id = int(offer_id)
+    awaiting_lead_id = int(lead.get("id"))
+    context.user_data["awaiting_counter_offer_offer_id"] = awaiting_offer_id
+    context.user_data["awaiting_counter_offer_lead_id"] = awaiting_lead_id
+    context.chat_data["awaiting_counter_offer_offer_id"] = awaiting_offer_id
+    context.chat_data["awaiting_counter_offer_lead_id"] = awaiting_lead_id
     await q.answer()
 
     lang = lead.get("language")
@@ -299,6 +303,12 @@ async def offer_counter_callback(update: Update, context: ContextTypes.DEFAULT_T
 async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     offer_id = context.user_data.get("awaiting_counter_offer_offer_id")
     lead_id = context.user_data.get("awaiting_counter_offer_lead_id")
+    if not offer_id or not lead_id:
+        offer_id = context.chat_data.get("awaiting_counter_offer_offer_id")
+        lead_id = context.chat_data.get("awaiting_counter_offer_lead_id")
+    if not offer_id or not lead_id:
+        return
+
     user = update.effective_user
     logger.info(
         "counter_offer_message called: user_id=%s offer_id=%s lead_id=%s",
@@ -306,8 +316,6 @@ async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TY
         offer_id,
         lead_id,
     )
-    if not offer_id or not lead_id:
-        return
 
     if user is None:
         return
@@ -316,6 +324,8 @@ async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TY
     if not lead:
         context.user_data.pop("awaiting_counter_offer_offer_id", None)
         context.user_data.pop("awaiting_counter_offer_lead_id", None)
+        context.chat_data.pop("awaiting_counter_offer_offer_id", None)
+        context.chat_data.pop("awaiting_counter_offer_lead_id", None)
         return
 
     if int(user.id) != int(lead.get("user_id")):
@@ -342,6 +352,8 @@ async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TY
 
     context.user_data.pop("awaiting_counter_offer_offer_id", None)
     context.user_data.pop("awaiting_counter_offer_lead_id", None)
+    context.chat_data.pop("awaiting_counter_offer_offer_id", None)
+    context.chat_data.pop("awaiting_counter_offer_lead_id", None)
 
     if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
         plate = lead.get("plate_number")
@@ -589,8 +601,12 @@ async def offer_response_callback(update: Update, context: ContextTypes.DEFAULT_
             pass
 
     if not accepted:
-        context.user_data["awaiting_counter_offer_offer_id"] = int(offer_id)
-        context.user_data["awaiting_counter_offer_lead_id"] = int(lead.get("id"))
+        awaiting_offer_id = int(offer_id)
+        awaiting_lead_id = int(lead.get("id"))
+        context.user_data["awaiting_counter_offer_offer_id"] = awaiting_offer_id
+        context.user_data["awaiting_counter_offer_lead_id"] = awaiting_lead_id
+        context.chat_data["awaiting_counter_offer_offer_id"] = awaiting_offer_id
+        context.chat_data["awaiting_counter_offer_lead_id"] = awaiting_lead_id
 
         if lang == "ee":
             prompt = "Kui soovite, kirjutage oma hind (näiteks 250 või 250€)."
