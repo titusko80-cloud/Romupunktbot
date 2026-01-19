@@ -97,22 +97,28 @@ def main():
 
     if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
         application.add_handler(CommandHandler("leads", leads_command))
-        application.add_handler(
-            MessageHandler(
-                filters.Chat(chat_id=ADMIN_TELEGRAM_USER_ID) & filters.TEXT & ~filters.COMMAND,
-                admin_price_message,
-            )
-        )
         application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r"^admin_reply:"))
         application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r"^admin_archive:"))
         application.add_handler(CallbackQueryHandler(admin_delete_callback, pattern=r"^admin_delete:"))
 
-    # Counter-offer price should only be accepted as a reply to our ForceReply prompt.
-    # Also exclude the admin chat so admin's numeric offer reply isn't intercepted.
-    counter_offer_filter = filters.REPLY & filters.TEXT & ~filters.COMMAND
+    # Message handler grouping:
+    # - Group 0: counter-offer handler (it is state-gated inside the handler)
+    # - Group 1: admin price handler
+    # - Group 2: conversation flow
+    # This prevents "first matching handler wins" from swallowing admin replies or counter-offers.
     if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
-        counter_offer_filter &= ~filters.Chat(chat_id=ADMIN_TELEGRAM_USER_ID)
-    application.add_handler(MessageHandler(counter_offer_filter, counter_offer_message))
+        application.add_handler(
+            MessageHandler(
+                filters.Chat(chat_id=ADMIN_TELEGRAM_USER_ID) & filters.TEXT & ~filters.COMMAND,
+                admin_price_message,
+            ),
+            group=0,
+        )
+
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, counter_offer_message),
+        group=1,
+    )
 
     conv_handler = ConversationHandler(
         entry_points=[
@@ -140,15 +146,10 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, phone_number),
             ],
         },
-        fallbacks=[
-            CommandHandler('start', start),
-            CommandHandler('new', start),
-            MessageHandler(filters.Regex(r'^🔄'), start),
-        ],
-        per_chat=True,     # ✅ DEFAULT, EXPLICIT
+        fallbacks=[CommandHandler('cancel', cancel)],
     )
     
-    application.add_handler(conv_handler, group=1)
+    application.add_handler(conv_handler, group=2)
     
     # Start the Bot
     application.run_polling(drop_pending_updates=True)
