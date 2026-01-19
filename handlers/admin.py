@@ -270,6 +270,12 @@ async def offer_counter_callback(update: Update, context: ContextTypes.DEFAULT_T
         await q.answer("Not allowed", show_alert=True)
         return
 
+    logger.info(
+        "offer_counter_callback: user_id=%s offer_id=%s lead_id=%s",
+        user.id,
+        offer_id,
+        lead.get("id"),
+    )
     context.user_data["awaiting_counter_offer_offer_id"] = int(offer_id)
     context.user_data["awaiting_counter_offer_lead_id"] = int(lead.get("id"))
     await q.answer()
@@ -293,10 +299,16 @@ async def offer_counter_callback(update: Update, context: ContextTypes.DEFAULT_T
 async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     offer_id = context.user_data.get("awaiting_counter_offer_offer_id")
     lead_id = context.user_data.get("awaiting_counter_offer_lead_id")
+    user = update.effective_user
+    logger.info(
+        "counter_offer_message called: user_id=%s offer_id=%s lead_id=%s",
+        user.id if user else None,
+        offer_id,
+        lead_id,
+    )
     if not offer_id or not lead_id:
         return
 
-    user = update.effective_user
     if user is None:
         return
 
@@ -311,6 +323,11 @@ async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TY
 
     raw_text = update.message.text if update.message else ""
     amount = _parse_price(raw_text)
+    logger.info(
+        "counter_offer_message: raw_text=%r parsed_amount=%s",
+        raw_text,
+        amount,
+    )
 
     lang = lead.get("language")
     if amount is None or amount <= 0:
@@ -338,6 +355,11 @@ async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TY
         )
         reply_markup = InlineKeyboardMarkup(
             [[InlineKeyboardButton("💬 Vasta", callback_data=f"admin_reply:{lead.get('id')}")]]
+        )
+        logger.info(
+            "counter_offer_message: notifying admin chat_id=%s for lead_id=%s",
+            ADMIN_TELEGRAM_USER_ID,
+            lead.get("id"),
         )
         await context.bot.send_message(chat_id=ADMIN_TELEGRAM_USER_ID, text=admin_text, reply_markup=reply_markup)
 
@@ -471,7 +493,7 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if amount is None or amount <= 0:
         logger.warning(f"admin_price_message: Invalid amount {amount}")
         await update.message.reply_text("Palun sisesta kehtiv hind (näiteks 800€ või 200).")
-        raise ApplicationHandlerStop
+        return
 
     lead = get_lead_by_id(int(lead_id))
     if not lead:
@@ -496,11 +518,11 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.exception("Failed to send offer to user %s (lead %s): %s", chat_id, lead_id, e)
         await update.message.reply_text("Ei saanud kasutajale pakkumist saata (võib-olla kasutaja on bot'i blokeerinud).")
         context.chat_data.pop("awaiting_price_lead_id", None)
-        raise ApplicationHandlerStop
+        return
 
     context.chat_data.pop("awaiting_price_lead_id", None)
     await update.message.reply_text(f"Pakkumine saadetud (#{lead_id}).")
-    raise ApplicationHandlerStop
+    return
 
 
 async def offer_response_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
