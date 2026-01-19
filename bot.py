@@ -103,7 +103,7 @@ def main():
         application.add_handler(CommandHandler("leads", leads_command))
         application.add_handler(
             MessageHandler(
-                filters.TEXT & ~filters.COMMAND & filters.User(user_id=ADMIN_TELEGRAM_USER_ID),
+                filters.TEXT & ~filters.COMMAND,
                 admin_price_message,
             )
         )
