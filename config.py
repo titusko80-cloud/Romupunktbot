@@ -5,7 +5,9 @@ Configuration settings for Romupunkt Bot
 import os
 
 # Your bot token from @BotFather
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or "YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN is missing")
 
 # Database settings
 DATABASE_URL = "sqlite:///romupunkt.db"
