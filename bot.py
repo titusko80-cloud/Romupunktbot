@@ -12,7 +12,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from telegram.ext import PicklePersistence
 from config import BOT_TOKEN, ADMIN_TELEGRAM_USER_ID
 from handlers.start import start, language_selection, welcome_continue
-from handlers.admin import leads_command, admin_lead_action_callback, offer_response_callback, admin_price_message, admin_archive_callback, admin_delete_callback
+from handlers.admin import leads_command, admin_lead_action_callback, offer_response_callback, offer_counter_callback, counter_offer_message, admin_price_message, admin_archive_callback, admin_delete_callback
 from handlers.vehicle import plate_validation, owner_name, owner_confirm, curb_weight
 from handlers.photos import photo_collection, photo_text, _done_keyboard
 from handlers.logistics import logistics_selection, location_received
@@ -92,6 +92,10 @@ def main():
 
     application = Application.builder().token(BOT_TOKEN).post_init(_post_init).persistence(persistence).build()
 
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, counter_offer_message)
+    )
+
     if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
         application.add_handler(CommandHandler("leads", leads_command))
         application.add_handler(
@@ -104,6 +108,7 @@ def main():
         application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r"^admin_archive:"))
         application.add_handler(CallbackQueryHandler(admin_delete_callback, pattern=r"^admin_delete:"))
         application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r"^offer_(accept|reject):"))
+        application.add_handler(CallbackQueryHandler(offer_counter_callback, pattern=r"^offer_counter:"))
 
     conv_handler = ConversationHandler(
         entry_points=[

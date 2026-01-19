@@ -190,7 +190,6 @@ def _parse_price(text: str) -> float | None:
     if not text:
         return None
 
-    # Normalize all whitespace (spaces, newlines, NBSP) to avoid parsing failures.
     compact = re.sub(r"\s+", "", text)
     m = re.search(r"(\d+(?:[\.,]\d{1,2})?)", compact)
     if not m:
@@ -217,21 +216,139 @@ def _offer_keyboard(lang: str, offer_id: int) -> InlineKeyboardMarkup:
     if lang == "ee":
         yes = "✅ JAH"
         no = "❌ EI"
+        counter = "💬 Teen oma pakkumise"
     elif lang == "ru":
         yes = "✅ ДА"
         no = "❌ НЕТ"
+        counter = "💬 Моя цена"
     else:
         yes = "✅ YES"
         no = "❌ NO"
+        counter = "💬 Counter offer"
 
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(yes, callback_data=f"offer_accept:{offer_id}"),
                 InlineKeyboardButton(no, callback_data=f"offer_reject:{offer_id}"),
-            ]
+            ],
+            [
+                InlineKeyboardButton(counter, callback_data=f"offer_counter:{offer_id}"),
+            ],
         ]
     )
+
+
+async def offer_counter_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    if q is None:
+        return
+
+    data = q.data or ""
+    if not data.startswith("offer_counter:"):
+        await q.answer()
+        return
+
+    try:
+        offer_id = int(data.split(":", 1)[1])
+    except Exception:
+        await q.answer("Error", show_alert=True)
+        return
+
+    offer = get_offer_by_id(offer_id)
+    if not offer:
+        await q.answer("Offer not found", show_alert=True)
+        return
+
+    lead = get_lead_by_id(int(offer.get("lead_id")))
+    if not lead:
+        await q.answer("Lead not found", show_alert=True)
+        return
+
+    user = update.effective_user
+    if user is None or int(user.id) != int(lead.get("user_id")):
+        await q.answer("Not allowed", show_alert=True)
+        return
+
+    context.user_data["awaiting_counter_offer_offer_id"] = int(offer_id)
+    context.user_data["awaiting_counter_offer_lead_id"] = int(lead.get("id"))
+    await q.answer()
+
+    lang = lead.get("language")
+    if lang == "ee":
+        prompt = "Palun kirjuta oma hind (näiteks 250 või 250€)."
+    elif lang == "ru":
+        prompt = "Напишите вашу цену (например 250 или 250€)."
+    else:
+        prompt = "Type your price (e.g. 250 or 250€)."
+
+    from telegram import ForceReply
+    await context.bot.send_message(
+        chat_id=int(lead.get("user_id")),
+        text=prompt,
+        reply_markup=ForceReply(selective=True),
+    )
+
+
+async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    offer_id = context.user_data.get("awaiting_counter_offer_offer_id")
+    lead_id = context.user_data.get("awaiting_counter_offer_lead_id")
+    if not offer_id or not lead_id:
+        return
+
+    user = update.effective_user
+    if user is None:
+        return
+
+    lead = get_lead_by_id(int(lead_id))
+    if not lead:
+        context.user_data.pop("awaiting_counter_offer_offer_id", None)
+        context.user_data.pop("awaiting_counter_offer_lead_id", None)
+        return
+
+    if int(user.id) != int(lead.get("user_id")):
+        return
+
+    raw_text = update.message.text if update.message else ""
+    amount = _parse_price(raw_text)
+
+    lang = lead.get("language")
+    if amount is None or amount <= 0:
+        if lang == "ee":
+            msg = "Palun sisesta number (näiteks 250)."
+        elif lang == "ru":
+            msg = "Пожалуйста, введите число (например 250)."
+        else:
+            msg = "Please send a number (e.g. 250)."
+        await update.message.reply_text(msg)
+        raise ApplicationHandlerStop
+
+    context.user_data.pop("awaiting_counter_offer_offer_id", None)
+    context.user_data.pop("awaiting_counter_offer_lead_id", None)
+
+    if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
+        plate = lead.get("plate_number")
+        phone = lead.get("phone_number")
+        admin_text = (
+            f"💬 Counter-offer received\n"
+            f"Lead #{lead.get('id')}\n"
+            f"Plate: {plate}\n"
+            f"Phone: {phone}\n"
+            f"User offered: {int(amount) if float(amount).is_integer() else amount}€"
+        )
+        reply_markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("💬 Vasta", callback_data=f"admin_reply:{lead.get('id')}")]]
+        )
+        await context.bot.send_message(chat_id=ADMIN_TELEGRAM_USER_ID, text=admin_text, reply_markup=reply_markup)
+
+    if lang == "ee":
+        ack = "Aitäh! Saatsime teie pakkumise üle."
+    elif lang == "ru":
+        ack = "Спасибо! Мы передали вашу цену."
+    else:
+        ack = "Thanks! We forwarded your price."
+    await update.message.reply_text(ack)
+    raise ApplicationHandlerStop
 
 
 async def admin_archive_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -337,9 +454,6 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     logger.info(f"admin_price_message: chat_data keys={list(context.chat_data.keys())}")
     
     if not lead_id:
-        # Important: the admin may also use the bot as a normal user.
-        # If we are not explicitly awaiting a price for a lead, do nothing and let
-        # other handlers (ConversationHandler) process the message.
         logger.info("admin_price_message: Not awaiting a price - ignoring message")
         return
 
