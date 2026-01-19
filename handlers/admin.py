@@ -337,8 +337,10 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     logger.info(f"admin_price_message: chat_data keys={list(context.chat_data.keys())}")
     
     if not lead_id:
-        logger.warning("admin_price_message: No awaiting_price_lead_id found")
-        await update.message.reply_text("Please first click '💬 Vasta' on a lead before sending a price.")
+        # Important: the admin may also use the bot as a normal user.
+        # If we are not explicitly awaiting a price for a lead, do nothing and let
+        # other handlers (ConversationHandler) process the message.
+        logger.info("admin_price_message: Not awaiting a price - ignoring message")
         return
 
     raw_text = update.message.text if update.message else ""
