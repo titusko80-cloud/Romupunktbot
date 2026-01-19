@@ -2,7 +2,7 @@ import re
 import logging
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ContextTypes, ApplicationHandlerStop
+from telegram.ext import ContextTypes
 
 from config import ADMIN_TELEGRAM_USER_ID
 from database.models import (
@@ -353,7 +353,7 @@ async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             msg = "Please send a number (e.g. 250)."
         await update.message.reply_text(msg)
-        raise ApplicationHandlerStop
+        return
 
     context.user_data.pop("awaiting_counter_offer_offer_id", None)
     context.user_data.pop("awaiting_counter_offer_lead_id", None)
@@ -387,7 +387,7 @@ async def counter_offer_message(update: Update, context: ContextTypes.DEFAULT_TY
     else:
         ack = "Thanks! We forwarded your price."
     await update.message.reply_text(ack)
-    raise ApplicationHandlerStop
+    return
 
 
 async def admin_archive_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

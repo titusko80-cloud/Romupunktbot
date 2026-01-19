@@ -99,6 +99,7 @@ def main():
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
             counter_offer_message,
+            block=False,
         )
     )
 
