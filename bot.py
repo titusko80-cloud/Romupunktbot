@@ -95,14 +95,6 @@ def main():
     application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r"^offer_(accept|reject):"))
     application.add_handler(CallbackQueryHandler(offer_counter_callback, pattern=r"^offer_counter:"))
 
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            counter_offer_message,
-            block=False,
-        )
-    )
-
     if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
         application.add_handler(CommandHandler("leads", leads_command))
         application.add_handler(
@@ -114,6 +106,13 @@ def main():
         application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r"^admin_reply:"))
         application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r"^admin_archive:"))
         application.add_handler(CallbackQueryHandler(admin_delete_callback, pattern=r"^admin_delete:"))
+
+    # Counter-offer price should only be accepted as a reply to our ForceReply prompt.
+    # Also exclude the admin chat so admin's numeric offer reply isn't intercepted.
+    counter_offer_filter = filters.REPLY & filters.TEXT & ~filters.COMMAND
+    if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
+        counter_offer_filter &= ~filters.Chat(chat_id=ADMIN_TELEGRAM_USER_ID)
+    application.add_handler(MessageHandler(counter_offer_filter, counter_offer_message))
 
     conv_handler = ConversationHandler(
         entry_points=[

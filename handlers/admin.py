@@ -474,6 +474,7 @@ async def admin_lead_action_callback(update: Update, context: ContextTypes.DEFAU
     context.chat_data.pop("awaiting_counter_offer_lead_id", None)
 
     context.chat_data["awaiting_price_lead_id"] = str(lead_id)
+    context.user_data["awaiting_price_lead_id"] = str(lead_id)
     await q.answer()
 
     from telegram import ForceReply
@@ -494,13 +495,27 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.warning("admin_price_message: Not authorized")
         return
 
-    lead_id = context.chat_data.get("awaiting_price_lead_id")
+    lead_id = context.chat_data.get("awaiting_price_lead_id") or context.user_data.get("awaiting_price_lead_id")
     logger.info(f"admin_price_message: awaiting_price_lead_id={lead_id}")
     logger.info(f"admin_price_message: chat_data keys={list(context.chat_data.keys())}")
     
     if not lead_id:
-        logger.info("admin_price_message: Not awaiting a price - ignoring message")
-        return
+        reply_text = ""
+        try:
+            if update.message and update.message.reply_to_message:
+                reply_text = update.message.reply_to_message.text or ""
+        except Exception:
+            reply_text = ""
+
+        m = re.search(r"#(\d+)", reply_text)
+        if m:
+            lead_id = m.group(1)
+            context.chat_data["awaiting_price_lead_id"] = str(lead_id)
+            context.user_data["awaiting_price_lead_id"] = str(lead_id)
+            logger.info("admin_price_message: recovered awaiting_price_lead_id=%s from reply_to_message", lead_id)
+        else:
+            logger.info("admin_price_message: Not awaiting a price - ignoring message")
+            return
 
     raw_text = update.message.text if update.message else ""
     logger.info(f"admin_price_message: raw_text='{raw_text}'")
@@ -544,6 +559,7 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     context.chat_data.pop("awaiting_price_lead_id", None)
+    context.user_data.pop("awaiting_price_lead_id", None)
     await update.message.reply_text(f"Pakkumine saadetud (#{lead_id}).")
     return
 
