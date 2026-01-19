@@ -38,6 +38,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.message:
+        await update.message.reply_text("Canceled")
+    return ConversationHandler.END
+
 def main():
     """Start the bot."""
     # Initialize database
