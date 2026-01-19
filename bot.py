@@ -96,6 +96,9 @@ def main():
         MessageHandler(filters.TEXT & ~filters.COMMAND, counter_offer_message)
     )
 
+    application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r"^offer_(accept|reject):"))
+    application.add_handler(CallbackQueryHandler(offer_counter_callback, pattern=r"^offer_counter:"))
+
     if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
         application.add_handler(CommandHandler("leads", leads_command))
         application.add_handler(
@@ -107,8 +110,6 @@ def main():
         application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r"^admin_reply:"))
         application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r"^admin_archive:"))
         application.add_handler(CallbackQueryHandler(admin_delete_callback, pattern=r"^admin_delete:"))
-        application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r"^offer_(accept|reject):"))
-        application.add_handler(CallbackQueryHandler(offer_counter_callback, pattern=r"^offer_counter:"))
 
     conv_handler = ConversationHandler(
         entry_points=[
