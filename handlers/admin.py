@@ -566,6 +566,27 @@ async def offer_response_callback(update: Update, context: ContextTypes.DEFAULT_
         except Exception:
             pass
 
+    if not accepted:
+        context.user_data["awaiting_counter_offer_offer_id"] = int(offer_id)
+        context.user_data["awaiting_counter_offer_lead_id"] = int(lead.get("id"))
+
+        if lang == "ee":
+            prompt = "Kui soovite, kirjutage oma hind (näiteks 250 või 250€)."
+        elif lang == "ru":
+            prompt = "Если хотите, напишите вашу цену (например 250 или 250€)."
+        else:
+            prompt = "If you want, type your price (e.g. 250 or 250€)."
+
+        from telegram import ForceReply
+        try:
+            await context.bot.send_message(
+                chat_id=int(lead.get("user_id")),
+                text=prompt,
+                reply_markup=ForceReply(selective=True),
+            )
+        except Exception:
+            pass
+
     if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
         plate = lead.get("plate_number")
         phone = lead.get("phone_number")
