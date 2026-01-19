@@ -101,6 +101,7 @@ def main():
             MessageHandler(
                 filters.Chat(chat_id=ADMIN_TELEGRAM_USER_ID) & filters.TEXT & ~filters.COMMAND,
                 admin_price_message,
+                block=False,
             )
         )
         application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r"^admin_reply:"))
