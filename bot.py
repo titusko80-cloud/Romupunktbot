@@ -109,8 +109,7 @@ def main():
 
     application.add_handler(
         MessageHandler(
-            (filters.TEXT & ~filters.COMMAND)
-            & (~filters.Chat(chat_id=ADMIN_TELEGRAM_USER_ID) if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0 else filters.ALL),
+            filters.TEXT & ~filters.COMMAND,
             counter_offer_message,
         )
     )
