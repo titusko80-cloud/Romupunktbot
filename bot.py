@@ -53,9 +53,6 @@ def main():
 
     persistence = PicklePersistence(
         filepath="bot_data.pkl",
-        store_chat_data=True,
-        store_user_data=True,
-        store_bot_data=True,
     )
 
     application = Application.builder().token(BOT_TOKEN).persistence(persistence).build()
