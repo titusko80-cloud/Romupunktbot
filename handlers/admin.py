@@ -551,6 +551,7 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             text=_offer_text(lang, float(amount)),
             reply_markup=_offer_keyboard(lang, offer_id),
         )
+        context.chat_data.pop("awaiting_price_lead_id", None)
         logger.info("Offer sent successfully to user %s", chat_id)
     except Exception as e:
         logger.exception("Failed to send offer to user %s (lead %s): %s", chat_id, lead_id, e)
