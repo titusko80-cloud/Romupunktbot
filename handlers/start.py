@@ -63,6 +63,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             del context._conversations[conversation_key]
             logger.info(f"start: cleared conversation state for {conversation_key}")
     
+    # Also clear chat_data if it exists
+    if hasattr(context, 'chat_data') and context.chat_data:
+        chat_id = update.effective_chat.id
+        if chat_id in context.chat_data:
+            context.chat_data[chat_id].clear()
+            logger.info(f"start: cleared chat_data for chat {chat_id}")
+    
     # Set fresh user data
     context.user_data["user_id"] = user.id
     context.user_data["telegram_username"] = getattr(user, "username", None)
@@ -190,7 +197,8 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def welcome_continue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     lang = context.user_data.get('language', 'en')
-    text = (update.message.text or '').strip().lower()
+    text = update.message.text.strip()
+    logger.info(f"WELCOME_CONTINUE text={text!r} lang={lang}")
 
     if lang == 'ee':
         start_text = "▶️ Alusta"
@@ -203,11 +211,11 @@ async def welcome_continue(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
 
     is_start = False
-    if lang == 'ee' and 'alusta' in text:
+    if lang == 'ee' and text == '▶️ Alusta':
         is_start = True
-    elif lang == 'ru' and ('нач' in text or 'start' == text):
+    elif lang == 'ru' and text == '▶️ Начать':
         is_start = True
-    elif lang == 'en' and 'start' in text:
+    elif lang == 'en' and text == '▶️ Start':
         is_start = True
 
     if not is_start:
