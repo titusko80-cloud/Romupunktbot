@@ -1,40 +1,43 @@
 #!/usr/bin/env python3
-"""
-Romupunkt Bot - Estonian Car Dismantling Market Bot
-A specialized Telegram bot for collecting vehicle data and handling
-legal requirements for car dismantling in Estonia.
-"""
 
-import asyncio
 import logging
+import signal
+import sys
+
 from telegram import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeChat, Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler, ContextTypes, CallbackQueryHandler
-from telegram.ext import PicklePersistence
-from config import BOT_TOKEN, ADMIN_TELEGRAM_USER_ID
-from handlers.start import start, language_selection, welcome_continue
-from handlers.admin import leads_command, admin_lead_action_callback, offer_response_callback, offer_counter_callback, counter_offer_message, admin_price_message, admin_archive_callback, admin_delete_callback
-from handlers.vehicle import plate_validation, owner_name, owner_confirm, curb_weight
-from handlers.photos import photo_collection, photo_text, _done_keyboard
-from handlers.logistics import logistics_selection, location_received
-from handlers.finalize import phone_number, handle_share_button
-from database.models import init_db
-from states import (
-    LANGUAGE,
-    WELCOME,
-    VEHICLE_PLATE,
-    OWNER_NAME,
-    OWNER_CONFIRM,
-    CURB_WEIGHT,
-    PHOTOS,
-    LOGISTICS,
-    LOCATION,
-    PHONE,
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    PicklePersistence,
+    filters,
 )
 
-# Enable logging
+from config import BOT_TOKEN, ADMIN_TELEGRAM_USER_ID
+from handlers.start import start, language_selection, welcome_continue
+from handlers.admin import (
+    leads_command,
+    admin_lead_action_callback,
+    offer_response_callback,
+    offer_counter_callback,
+    counter_offer_message,
+    admin_price_message,
+    admin_archive_callback,
+    admin_delete_callback,
+)
+from handlers.vehicle import plate_validation, owner_name, owner_confirm, curb_weight
+from handlers.photos import photo_collection, photo_text
+from handlers.logistics import logistics_selection, location_received
+from handlers.finalize import phone_number
+from database.models import init_db
+from states import *
+
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -44,75 +47,48 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("Canceled")
     return ConversationHandler.END
 
+
 def main():
-    """Start the bot."""
-    # Initialize database
     init_db()
-    
-    # Set up persistence for concurrency safety
-    persistence = PicklePersistence(filepath='bot_data.pkl', on_flush=False)
-    
-    async def _post_init(app: Application) -> None:
-        """Set up bot descriptions and commands"""
-        try:
-            # Set honest multilingual descriptions for empty chat window
-            descriptions = {
-                'et': '💰 ROMUPUNKT: Ostame teie vana auto rahaks. Saada andmed ja pildid – teeme pakkumise.',
-                'en': '💰 ROMUPUNKT: Buy your old car for cash. Send details and photos – we make an offer.',
-                'ru': '💰 ROMUPUNKT: Купите вашу старую машину за наличные. Отправьте данные и фото – мы сделаем предложение.'
-            }
-            
-            # Set descriptions for all languages
-            for lang_code, desc in descriptions.items():
-                try:
-                    await application.bot.set_my_description(description=desc, language_code=lang_code)
-                    logger.info(f"✅ Bot description set for language: {lang_code}")
-                except Exception as e:
-                    logger.warning(f"❌ Failed to set description for {lang_code}: {e}")
-                    
-        except Exception as e:
-            logger.warning("Failed to set bot descriptions: %s", e)
-        
-        # Set commands for all users
-        try:
-            commands = [
-                BotCommand('start', 'Start / Start'),
-                BotCommand('new', 'New inquiry / Uus päring / Новая заявка'),
-            ]
-            await application.bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
-            logger.info("Bot commands set for all users")
-        except Exception as e:
-            logger.warning("Failed to set bot commands: %s", e)
-        
-        # Set commands for admin
-        if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
-            try:
-                commands = [
-                    BotCommand("start", "Alusta"),
-                    BotCommand("new", "Uus päring"),
-                    BotCommand("leads", "Admin: päringud"),
-                ]
-                await application.bot.set_my_commands(commands, scope=BotCommandScopeChat(ADMIN_TELEGRAM_USER_ID))
-            except Exception:
-                pass
 
-    application = Application.builder().token(BOT_TOKEN).post_init(_post_init).persistence(persistence).build()
+    persistence = PicklePersistence(
+        filepath="bot_data.pkl",
+        store_chat_data=True,
+        store_user_data=True,
+        store_bot_data=True,
+    )
 
-    application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r"^offer_(accept|reject):"))
-    application.add_handler(CallbackQueryHandler(offer_counter_callback, pattern=r"^offer_counter:"))
+    application = Application.builder().token(BOT_TOKEN).persistence(persistence).build()
 
-    if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
+    async def post_init(app: Application):
+        await app.bot.set_my_commands(
+            [
+                BotCommand("start", "Start"),
+                BotCommand("new", "New inquiry"),
+            ],
+            scope=BotCommandScopeAllPrivateChats(),
+        )
+
+        if ADMIN_TELEGRAM_USER_ID:
+            await app.bot.set_my_commands(
+                [
+                    BotCommand("start", "Start"),
+                    BotCommand("new", "New inquiry"),
+                    BotCommand("leads", "Admin leads"),
+                ],
+                scope=BotCommandScopeChat(ADMIN_TELEGRAM_USER_ID),
+            )
+
+    application.post_init = post_init
+
+    application.add_handler(CallbackQueryHandler(offer_response_callback, pattern=r"^offer_"))
+    application.add_handler(CallbackQueryHandler(offer_counter_callback, pattern=r"^offer_counter"))
+    application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r"^admin_reply"))
+    application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r"^admin_archive"))
+    application.add_handler(CallbackQueryHandler(admin_delete_callback, pattern=r"^admin_delete"))
+
+    if ADMIN_TELEGRAM_USER_ID:
         application.add_handler(CommandHandler("leads", leads_command))
-        application.add_handler(CallbackQueryHandler(admin_lead_action_callback, pattern=r"^admin_reply:"))
-        application.add_handler(CallbackQueryHandler(admin_archive_callback, pattern=r"^admin_archive:"))
-        application.add_handler(CallbackQueryHandler(admin_delete_callback, pattern=r"^admin_delete:"))
-
-    # Message handler grouping:
-    # - Group 0: counter-offer handler (it is state-gated inside the handler)
-    # - Group 1: admin price handler
-    # - Group 2: conversation flow
-    # This prevents "first matching handler wins" from swallowing admin replies or counter-offers.
-    if ADMIN_TELEGRAM_USER_ID and ADMIN_TELEGRAM_USER_ID > 0:
         application.add_handler(
             MessageHandler(
                 filters.Chat(chat_id=ADMIN_TELEGRAM_USER_ID) & filters.TEXT & ~filters.COMMAND,
@@ -126,11 +102,10 @@ def main():
         group=1,
     )
 
-    conv_handler = ConversationHandler(
+    conv = ConversationHandler(
         entry_points=[
-            CommandHandler('start', start),
-            CommandHandler('new', start),
-            MessageHandler(filters.Regex(r'^🔄'), start),
+            CommandHandler("start", start),
+            CommandHandler("new", start),
         ],
         states={
             LANGUAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, language_selection)],
@@ -142,23 +117,37 @@ def main():
             LOGISTICS: [MessageHandler(filters.TEXT & ~filters.COMMAND, logistics_selection)],
             PHOTOS: [
                 MessageHandler(filters.PHOTO | filters.Document.IMAGE, photo_collection),
-                MessageHandler(filters.Regex(r"^✅"), photo_text),
+                MessageHandler(filters.Regex("^✅"), photo_text),
             ],
             LOCATION: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, location_received),
                 MessageHandler(filters.LOCATION, location_received),
             ],
-            PHONE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, phone_number),
-            ],
+            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, phone_number)],
         },
-        fallbacks=[CommandHandler('cancel', cancel)],
+        fallbacks=[CommandHandler("cancel", cancel)],
+        name="main_conversation",
+        persistent=True,
     )
-    
-    application.add_handler(conv_handler, group=2)
-    
-    # Start the Bot
-    application.run_polling(drop_pending_updates=True)
 
-if __name__ == '__main__':
+    application.add_handler(conv, group=2)
+
+    def shutdown(*_):
+        logger.warning("Received shutdown signal")
+        try:
+            application.stop()
+        except Exception:
+            pass
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+
+    application.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES,
+    )
+
+
+if __name__ == "__main__":
     main()
