@@ -140,20 +140,20 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if chat_id is not None:
             if lang == 'ee':
                 commands = [
-                    BotCommand('start', 'Alusta'),
-                    BotCommand('new', 'Uus päring'),
+                    BotCommand('start', 'Start'),
+                    BotCommand('new', 'Alusta'),
                 ]
                 admin_desc = 'Admin: päringud'
             elif lang == 'ru':
                 commands = [
                     BotCommand('start', 'Старт'),
-                    BotCommand('new', 'Новая заявка'),
+                    BotCommand('new', 'Начать'),
                 ]
                 admin_desc = 'Админ: заявки'
             else:
                 commands = [
                     BotCommand('start', 'Start'),
-                    BotCommand('new', 'New inquiry'),
+                    BotCommand('new', 'Start'),
                 ]
                 admin_desc = 'Admin: leads'
 
