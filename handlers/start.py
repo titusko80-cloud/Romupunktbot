@@ -77,24 +77,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     logger.info(f"start: cleared user_data, new keys={list(context.user_data.keys())}")
     
     # Show bot logo first
+    branding_text = "💰 ROMUPUNKT\n\nOstame autosid igas seisukorras"
     try:
         with open("logo.jpg", "rb") as photo_file:
+            logger.info("start: sending logo photo")
             await update.message.reply_photo(
                 photo=photo_file,
-                caption="💰 **ROMUPUNKT**\n\n*Ostame autosid igas seisukorras*",
-                parse_mode="Markdown"
+                caption=branding_text,
             )
     except FileNotFoundError:
-        await update.message.reply_text("💰 **ROMUPUNKT**\n\n*Ostame autosid igas seisukorras*", parse_mode="Markdown")
+        logger.info("start: logo.jpg not found; sending branding text")
+        await update.message.reply_text(branding_text)
     except Exception as e:
         logger.error(f"Failed to send logo: {e}")
-        await update.message.reply_text("💰 **ROMUPUNKT**\n\n*Ostame autosid igas seisukorras*", parse_mode="Markdown")
+        await update.message.reply_text(branding_text)
 
     # Show language selection
     keyboard = [
         [KeyboardButton("🇪🇪 Eesti"), KeyboardButton("🇬🇧 English"), KeyboardButton("🇷🇺 Русский")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
+    logger.info("start: sending language keyboard")
     await update.message.reply_text(
         "Vali keel:",
         reply_markup=reply_markup,
