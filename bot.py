@@ -40,12 +40,17 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger(__name__)
+logger.info("BOOT: bot process started")
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.message:
         await update.message.reply_text("Canceled")
     return ConversationHandler.END
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.exception("Unhandled exception", exc_info=context.error)
 
 
 def main():
@@ -56,6 +61,7 @@ def main():
     )
 
     application = Application.builder().token(BOT_TOKEN).persistence(persistence).build()
+    application.add_error_handler(error_handler)
 
     async def post_init(app: Application):
         await app.bot.set_my_commands(
@@ -140,6 +146,7 @@ def main():
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
 
+    logger.info("BOOT: starting polling")
     application.run_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES,
