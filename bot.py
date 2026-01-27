@@ -110,6 +110,7 @@ def main():
         entry_points=[
             CommandHandler("start", start),
             CommandHandler("new", start),
+            MessageHandler(filters.Regex(r"^(🔄 Uus päring|🔄 New inquiry|🔄 Новая заявка)$"), start),
         ],
         states={
             LANGUAGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, language_selection)],
