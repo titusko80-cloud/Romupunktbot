@@ -500,22 +500,8 @@ async def admin_price_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     logger.info(f"admin_price_message: chat_data keys={list(context.chat_data.keys())}")
     
     if not lead_id:
-        reply_text = ""
-        try:
-            if update.message and update.message.reply_to_message:
-                reply_text = update.message.reply_to_message.text or ""
-        except Exception:
-            reply_text = ""
-
-        m = re.search(r"#(\d+)", reply_text)
-        if m:
-            lead_id = m.group(1)
-            context.chat_data["awaiting_price_lead_id"] = str(lead_id)
-            context.user_data["awaiting_price_lead_id"] = str(lead_id)
-            logger.info("admin_price_message: recovered awaiting_price_lead_id=%s from reply_to_message", lead_id)
-        else:
-            logger.info("admin_price_message: Not awaiting a price - ignoring message")
-            return
+        logger.info("admin_price_message: Not awaiting a price - ignoring message")
+        return
 
     raw_text = update.message.text if update.message else ""
     logger.info(f"admin_price_message: raw_text='{raw_text}'")

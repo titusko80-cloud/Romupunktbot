@@ -57,18 +57,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     # Clear any existing user_data and conversation state to ensure fresh start
     context.user_data.clear()
-    if hasattr(context, '_conversations'):
-        conversation_key = (update.effective_chat.id, update.effective_user.id)
-        if conversation_key in context._conversations:
-            del context._conversations[conversation_key]
-            logger.info(f"start: cleared conversation state for {conversation_key}")
-    
-    # Also clear chat_data if it exists
-    if hasattr(context, 'chat_data') and context.chat_data:
-        chat_id = update.effective_chat.id
-        if chat_id in context.chat_data:
-            context.chat_data[chat_id].clear()
-            logger.info(f"start: cleared chat_data for chat {chat_id}")
+    context.chat_data.clear()
     
     # Set fresh user data
     context.user_data["user_id"] = user.id

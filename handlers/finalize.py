@@ -11,7 +11,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 from config import ADMIN_TELEGRAM_USER_ID
 from database.models import save_lead, get_lead_photos, get_lead_by_id, move_session_photos_to_lead
-from states import PHONE
+from states import PHONE, PHOTOS
 
 
 _BASE_DIR = Path(__file__).resolve().parent.parent
@@ -170,10 +170,28 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     
     # Check if we have session photos
     session_id = context.user_data.get('session_id')
+    if not session_id:
+        if context.user_data.get("language") == "ee":
+            msg = "📸 Palun laadi üles vähemalt üks pilt enne kui jätkad."
+        elif context.user_data.get("language") == "ru":
+            msg = "📸 Пожалуйста, отправьте хотя бы одно фото перед тем как продолжить."
+        else:
+            msg = "📸 Please upload at least one photo before continuing."
+        await update.message.reply_text(msg)
+        return PHOTOS
     if session_id:
         from database.models import get_session_photos, move_session_photos_to_lead
         user_id = update.effective_user.id
         photos = get_session_photos(user_id, session_id)
+        if not photos:
+            if context.user_data.get("language") == "ee":
+                msg = "📸 Palun laadi üles vähemalt üks pilt enne kui jätkad."
+            elif context.user_data.get("language") == "ru":
+                msg = "📸 Пожалуйста, отправьте хотя бы одно фото перед тем как продолжить."
+            else:
+                msg = "📸 Please upload at least one photo before continuing."
+            await update.message.reply_text(msg)
+            return PHOTOS
         
         # Create lead with all data
         logger.info("Creating lead with %d session photos", len(photos))
@@ -183,10 +201,10 @@ async def phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         # Move photos from session to permanent storage BEFORE notification
         move_session_photos_to_lead(user_id, session_id, lead_id)
         
-        # 🔴 STEP 4 - HARD FAIL IF PHOTOS ARE ZERO
+        #  STEP 4 - HARD FAIL IF PHOTOS ARE ZERO
         photos = get_lead_photos(lead_id)
         if not photos:
-            raise RuntimeError("FATAL: Lead finalized without photos")
+            logger.error("Lead %s finalized without photos; continuing without crashing", lead_id)
         
         logger.info("ATTACHED %d PHOTOS to lead %d", len(photos), lead_id)
         

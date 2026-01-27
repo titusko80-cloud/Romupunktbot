@@ -95,7 +95,7 @@ def main():
         application.add_handler(CommandHandler("leads", leads_command))
         application.add_handler(
             MessageHandler(
-                filters.Chat(chat_id=ADMIN_TELEGRAM_USER_ID) & filters.TEXT & ~filters.COMMAND,
+                filters.Chat(chat_id=ADMIN_TELEGRAM_USER_ID) & filters.REPLY & filters.TEXT & ~filters.COMMAND,
                 admin_price_message,
             ),
             group=0,
@@ -133,6 +133,7 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
         name="main_conversation",
         persistent=True,
+        allow_reentry=True,
     )
 
     application.add_handler(conv, group=2)

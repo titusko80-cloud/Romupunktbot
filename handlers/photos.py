@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 import logging
+from uuid import uuid4
 from database.models import save_session_photo
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,16 @@ async def photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         done_texts = {"✅ Done"}
 
     if text in done_texts:
+        photo_count = context.user_data.get("photo_count") or 0
+        if photo_count < 1:
+            if lang == "ee":
+                msg = "📸 Palun laadi vähemalt üks pilt üles enne kui jätkad."
+            elif lang == "ru":
+                msg = "📸 Пожалуйста, отправьте хотя бы одно фото перед тем как продолжить."
+            else:
+                msg = "📸 Please upload at least one photo before continuing."
+            await update.message.reply_text(msg)
+            return PHOTOS
         if lang == "ee":
             msg = "📞 Palun sisesta oma telefoninumber, et saaksime sinuga kohe ühendust võtta."
         elif lang == "ru":
@@ -55,10 +66,11 @@ async def photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def photo_collection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # TASK 8 - HARD ASSERTION AUDIT
-    assert context.user_data.get("session_id"), "NO SESSION ID"
-    assert context.user_data.get("photo_count") is not None, "NO PHOTO COUNT"
-    
+    if not context.user_data.get("session_id"):
+        context.user_data["session_id"] = uuid4().hex
+    if context.user_data.get("photo_count") is None:
+        context.user_data["photo_count"] = 0
+     
     # TASK 3 - PHOTO COLLECTION MUST BE DUMB AND PURE
     file_id = None
     if update.message.photo:
